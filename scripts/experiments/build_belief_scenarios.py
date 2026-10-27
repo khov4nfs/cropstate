@@ -76,9 +76,12 @@ def main():
 
     temperature = 1.0
     calib_path = Path(args.calibration)
-    if calib_path.exists():
+    calibration_applied = calib_path.is_file()
+    if calibration_applied:
         calib = json.loads(calib_path.read_text())
-        temperature = float(calib.get(args.model, {}).get("temperature", 1.0))
+        if args.model not in calib or "temperature" not in calib[args.model]:
+            raise ValueError(f"Missing validation-fitted temperature for model {args.model!r} in {calib_path}")
+        temperature = float(calib[args.model]["temperature"])
     if not np.isfinite(temperature) or temperature <= 0:
         raise ValueError("Calibration temperature must be finite and positive")
 
@@ -119,6 +122,7 @@ def main():
                 "confidence": round(confidence, 6),
                 "confidence_method": args.confidence_method,
                 "calibration_temperature": round(float(temperature), 6),
+                "calibration_applied": str(calibration_applied).lower(),
                 "relevant_chunk_ids": "|".join(rel),
                 "incompatible_chunk_ids": "|".join(inc),
             })

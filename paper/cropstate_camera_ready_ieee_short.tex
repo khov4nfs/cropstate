@@ -145,21 +145,21 @@ Vision metrics are accuracy, macro-F1, per-class recall, ECE, Brier score, and M
 
 \subsection{Stage Classification (RQ1)}
 
-All three losses beat the majority-class reference (accuracy 0.335) by a wide margin (Table~\ref{tab:results}). Among the losses, differences in overall accuracy, macro-F1, and MASD are within seed noise: the ordinal loss holds a razor-thin, non-meaningful lead on mean accuracy (0.801 vs 0.800), macro-F1 (0.796 vs 0.794), and MASD (0.233 vs 0.238), while cross-entropy has the lowest ECE. A single seed can even invert the accuracy ranking---on seed 42 the ordinal model reaches 0.814 versus cross-entropy's 0.795, whereas cross-entropy leads on the highest-accuracy seed---which is why we report three-seed means on a fixed split rather than a single lucky run.
+All three losses beat the majority-class reference (accuracy 0.335) by a wide margin (Table~\ref{tab:results}). Among the losses, differences in overall accuracy, macro-F1, and MASD (CE 0.238, ordinal 0.233, focal 0.271) are within seed noise: the ordinal loss holds a razor-thin, non-meaningful lead on mean accuracy (0.801 vs 0.800), macro-F1 (0.796 vs 0.794), and MASD (0.233 vs 0.238), while cross-entropy has the lowest ECE. A single seed can even invert the accuracy ranking---on seed 42 the ordinal model reaches 0.814 versus cross-entropy's 0.795, whereas cross-entropy leads on the highest-accuracy seed---which is why we report three-seed means on a fixed split rather than a single lucky run.
 
 \begin{table}[t]
 \centering
-\caption{ResNet-18 on the 2{,}900-image benchmark (2{,}400 train / 237 validation / 263 test; fixed group split). Each learned row is mean $\pm$ standard deviation over three seeds (42, 7, 123) sharing the \emph{same} split, so the spread reflects initialization variance only. Best value per column in bold.}
+\caption{Vision on the 2{,}900-image derived-stage benchmark. Three training seeds (42, 7, 123) on one fixed split: mean $\pm$ std. Labels are morphology-derived, not expert verified.}
 \label{tab:results}
 \small
-\begin{tabular}{lccccc}
+\begin{tabular}{lccc}
 \toprule
-\textbf{Model / loss} & \textbf{Acc.} & \textbf{Macro-F1} & \textbf{MASD}$\downarrow$ & \textbf{ECE}$\downarrow$ & \textbf{Repro. recall ($\sigma$)} \\
+\textbf{Model / loss} & \textbf{Acc.} & \textbf{Macro-F1} & \textbf{ECE}$\downarrow$ \\
 \midrule
-Majority (tillering) & 0.335 & 0.084 & 1.10 & n/a & 0.000 (n/a) \\
-ResNet-18, cross-entropy & 0.800 $\pm$ 0.007 & 0.794 $\pm$ 0.019 & 0.238 $\pm$ 0.013 & \textbf{0.062 $\pm$ 0.014} & 0.903 (0.052) \\
-ResNet-18, ordinal & \textbf{0.801 $\pm$ 0.013} & \textbf{0.796 $\pm$ 0.018} & \textbf{0.233 $\pm$ 0.013} & 0.064 $\pm$ 0.002 & \textbf{0.917 (0.000)} \\
-ResNet-18, focal & 0.767 $\pm$ 0.016 & 0.757 $\pm$ 0.014 & 0.271 $\pm$ 0.010 & 0.179 $\pm$ 0.027 & 0.875 (0.059) \\
+Majority & 0.335 & 0.084 & n/a \\
+ResNet-18 CE & 0.800 $\pm$ 0.007 & 0.794 $\pm$ 0.019 & \textbf{0.062 $\pm$ 0.014} \\
+ResNet-18 ordinal & \textbf{0.801 $\pm$ 0.013} & \textbf{0.796 $\pm$ 0.018} & 0.064 $\pm$ 0.002 \\
+ResNet-18 focal & 0.767 $\pm$ 0.016 & 0.757 $\pm$ 0.014 & 0.179 $\pm$ 0.027 \\
 \bottomrule
 \end{tabular}
 \end{table}

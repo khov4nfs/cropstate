@@ -51,7 +51,8 @@ def assert_scenario_provenance(scenarios: Path, expected_scenarios: int,
     # confidence. Never silently call them calibrated experimental results.
     if not allow_legacy:
         if any(r.get("confidence_method") != "combined" or
-               not r.get("calibration_temperature") for r in rows):
+               not r.get("calibration_temperature") or
+               r.get("calibration_applied") != "true" for r in rows):
             raise ValueError(
                 "Expected scenario rows generated with calibrated belief and "
                 "confidence_method=combined. Regenerate from original logits or "

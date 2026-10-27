@@ -34,13 +34,20 @@ jobs:
           pages=len(PdfReader(str(target)).pages)
           print(f"IEEE draft page count: {pages} (standard cap 6)")
           if pages>6:
-              print("WARNING: EXCEEDS SIX-PAGE CAP; draft must be shortened or excess-page fee handled.")
-          print("WARNING: LEGACY RESULT TABLES HAVE NOT BEEN REVERIFIED.")
+              raise SystemExit("FAIL: IEEE draft exceeds six-page standard cap.")
+          build_log=Path("paper/cropstate_camera_ready_ieee_short.log").read_text(errors="replace")
+          for warning in ("Overfull \\\\hbox", "There were undefined references",
+                          "Undefined control sequence", "Missing character:"):
+              if warning in build_log:
+                  raise SystemExit("FAIL: camera-ready build warning: " + warning)
+          print("Verified six-page layout: no overfull boxes or unresolved references.")
+          print("NOTE: Retrieval recomputed on metadata-derived labels; vision metrics remain historical.")
+          print("NOTE: Expert BBCH and independent agronomic relevance validation are pending.")
           PY
       - name: Upload non-final PDF and build log
         uses: actions/upload-artifact@v4
         with:
-          name: cropstate-ieee-short-draft-unverified-results
+          name: cropstate-ieee-draft-recomputed-metadata
           path: |
             paper/cropstate_camera_ready_ieee_short.pdf
             paper/cropstate_camera_ready_ieee_short.log

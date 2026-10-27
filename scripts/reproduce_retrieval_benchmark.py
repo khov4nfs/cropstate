@@ -33,7 +33,7 @@ def digest(path: Path) -> str:
 
 
 def assert_scenario_provenance(scenarios: Path, expected_scenarios: int,
-                               expected_images: int) -> dict[str, int]:
+                               expected_images: int, allow_legacy: bool = False) -> dict[str, int]:
     with scenarios.open(encoding="utf-8-sig", newline="") as stream:
         rows = list(csv.DictReader(stream))
     required = {
@@ -47,6 +47,16 @@ def assert_scenario_provenance(scenarios: Path, expected_scenarios: int,
             f"Expected {expected_scenarios} independently identified scenario rows, got {len(rows)}. "
             "Do not relabel a different evaluation set as the reported 420 scenarios."
         )
+    # Old scenario CSV files used raw softmax probabilities and top-1
+    # confidence. Never silently call them calibrated experimental results.
+    if not allow_legacy:
+        if any(r.get("confidence_method") != "combined" or
+               not r.get("calibration_temperature") for r in rows):
+            raise ValueError(
+                "Expected scenario rows generated with calibrated belief and "
+                "confidence_method=combined. Regenerate from original logits or "
+                "explicitly pass --allow-legacy-beliefs for the old-protocol ablation."
+            )
     ids = [r["scenario_id"] for r in rows]
     if len(set(ids)) != len(ids):
         raise ValueError("Duplicate scenario IDs")
@@ -126,6 +136,8 @@ def main() -> None:
     parser.add_argument("--expected-images", type=int, default=199)
     parser.add_argument("--fixed-beta", type=float, default=0.20)
     parser.add_argument("--bootstrap", type=int, default=5000)
+    parser.add_argument("--allow-legacy-beliefs", action="store_true",
+                        help="Allow historical raw/top1 beliefs; results must be labeled legacy.")
     parser.add_argument("--check-only", action="store_true",
                         help="Validate required inputs and scenarios without importing encoder/model")
     args = parser.parse_args()
@@ -142,7 +154,11 @@ def main() -> None:
             parser.error(f"Model {args.model!r} absent from logits index")
         logits_file = Path(logits_index[args.model]["path"])
         if not logits_file.is_absolute():
-            logits_file = (args.logits_index.parent / logits_file).resolve()
+            # Exported logits indexes commonly store paths relative to the
+            # working repository root, not relative to the index file itself.
+            from_cwd = (ROOT / logits_file).resolve()
+            from_index = (args.logits_index.parent / logits_file).resolve()
+            logits_file = from_cwd if from_cwd.is_file() else from_index
         if not logits_file.is_file():
             parser.error(f"Referenced logits archive does not exist: {logits_file}")
         # Existing scenario builder expects paths recorded by index to be usable
@@ -163,7 +179,10 @@ def main() -> None:
     else:
         scenarios = args.scenarios
     if scenarios.is_file():
-        checked = assert_scenario_provenance(scenarios, args.expected_scenarios, args.expected_images)
+        checked = assert_scenario_provenance(
+            scenarios, args.expected_scenarios, args.expected_images,
+            allow_legacy=args.allow_legacy_beliefs,
+        )
     elif args.check_only and args.logits_index:
         print("CHECK ONLY: logits and corpus exist; scenario counts require generation.")
         return
@@ -195,6 +214,7 @@ def main() -> None:
         "scenario_count": checked["scenario_count"],
         "contributing_images": checked["contributing_images"],
         "generated_with": "scripts/reproduce_retrieval_benchmark.py",
+        "allow_legacy_beliefs": args.allow_legacy_beliefs,
         "notes": "Automatic stage compatibility only; requires independent expert evaluation.",
     }
     (args.output_dir / "PROVENANCE.json").write_text(

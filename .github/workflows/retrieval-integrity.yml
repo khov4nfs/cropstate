@@ -8,6 +8,10 @@ on:
       - "tests/test_scenario_calibration.py"
       - "tests/test_retrieval.py"
       - "src/cropstate/retrieval.py"
+      - "scripts/reproduce_retrieval_benchmark.py"
+      - "scripts/analyze_retrieval_significance_clustered.py"
+      - "scripts/evaluate_retrieval.py"
+      - "tests/test_retrieval_reproduction.py"
       - ".github/workflows/retrieval-integrity.yml"
   workflow_dispatch:
 
@@ -25,3 +29,5 @@ jobs:
         run: PYTHONPATH=src python -m unittest discover -s tests -p 'test_scenario_calibration.py' -v
       - name: Verify stage reranking without source authority confounding
         run: PYTHONPATH=src python -m unittest discover -s tests -p 'test_retrieval.py' -v
+      - name: Verify 420-scenario provenance preflight (synthetic fixtures only)
+        run: PYTHONPATH=src python -m unittest discover -s tests -p 'test_retrieval_reproduction.py' -v

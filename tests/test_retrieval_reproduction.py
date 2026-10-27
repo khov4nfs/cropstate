@@ -19,7 +19,7 @@ class ReproductionPreflightTests(unittest.TestCase):
         fields = [
             "scenario_id", "stage_belief", "confidence", "ground_truth_stage",
             "predicted_stage", "relevant_chunk_ids", "incompatible_chunk_ids",
-            "confidence_method", "calibration_temperature",
+            "confidence_method", "calibration_temperature", "calibration_applied",
         ]
         rows = []
         for i in range(199):
@@ -34,6 +34,7 @@ class ReproductionPreflightTests(unittest.TestCase):
                     "incompatible_chunk_ids": "chunk2",
                     "confidence_method": "top1" if legacy else "combined",
                     "calibration_temperature": "" if legacy else "0.875",
+                    "calibration_applied": "false" if legacy else "true",
                 })
         with self.file.open("w", newline="", encoding="utf-8") as stream:
             writer = csv.DictWriter(stream, fields)

@@ -3,7 +3,7 @@ name: Draft IEEE camera-ready compilation
 on:
   pull_request:
     paths:
-      - "paper/cropstate_camera_ready_ieee_compact.tex"
+      - "paper/cropstate_camera_ready_ieee_short.tex"
       - "paper/references.bib"
       - "paper/figures/**"
       - ".github/workflows/camera-ready-ieee-draft.yml"
@@ -18,7 +18,7 @@ jobs:
         uses: xu-cheng/latex-action@v3
         with:
           working_directory: paper
-          root_file: cropstate_camera_ready_ieee_compact.tex
+          root_file: cropstate_camera_ready_ieee_short.tex
           latexmk_use_xelatex: true
           os: debian
       - uses: actions/setup-python@v5
@@ -30,7 +30,7 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           from pypdf import PdfReader
-          target=Path("paper/cropstate_camera_ready_ieee_compact.pdf")
+          target=Path("paper/cropstate_camera_ready_ieee_short.pdf")
           pages=len(PdfReader(str(target)).pages)
           print(f"IEEE draft page count: {pages} (standard cap 6)")
           if pages>6:
@@ -40,8 +40,8 @@ jobs:
       - name: Upload non-final PDF and build log
         uses: actions/upload-artifact@v4
         with:
-          name: cropstate-ieee-compact-draft-unverified-results
+          name: cropstate-ieee-short-draft-unverified-results
           path: |
-            paper/cropstate_camera_ready_ieee_compact.pdf
-            paper/cropstate_camera_ready_ieee_compact.log
+            paper/cropstate_camera_ready_ieee_short.pdf
+            paper/cropstate_camera_ready_ieee_short.log
           retention-days: 30

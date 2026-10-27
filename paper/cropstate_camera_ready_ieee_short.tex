@@ -240,18 +240,18 @@ Table~\ref{tab:strat} stratifies the same scenarios. On correct-stage scenarios 
 
 \begin{table}[t]
 \centering
-\caption{nDCG@5 / metadata-defined SIRR@5 by vision error condition. Bold: best non-oracle nDCG and minimum SIRR per stratum; nonadjacent $n=6$ is underpowered.}
+\caption{nDCG@5 / metadata-defined SIRR@5 by condition (correct $n=330$, adjacent $n=84$, nonadjacent $n=6$). Bold: best non-oracle nDCG and minimum SIRR per stratum; nonadjacent $n=6$ is underpowered.}
 \label{tab:strat}
 \small
 \begin{tabular}{lccc}
 \toprule
-\textbf{Method} & \textbf{Correct ($n{=}330$)} & \textbf{Adjacent ($n{=}84$)} & \textbf{Non-adj. ($n{=}6$)} \\
+\textbf{Method} & \textbf{Correct} & \textbf{Adjacent} & \textbf{Nonadj.} \\
 \midrule
-B0: Ungated hybrid & 0.484 / 0.318 & 0.595 / 0.221 & 0.066 / 0.833 \\
-B1: Query expansion & 0.504 / 0.301 & 0.574 / 0.188 & 0.000 / 0.767 \\
-B2: Hard filter & 0.673 / \textbf{0.000} & 0.397 / \textbf{0.005} & \textbf{0.213} / \textbf{0.100} \\
-B3: Fixed soft & 0.627 / 0.178 & 0.607 / 0.171 & 0.189 / 0.600 \\
-P: Adaptive & \textbf{0.689} / 0.107 & \textbf{0.611} / 0.160 & 0.194 / 0.567 \\
+B0 & 0.484 / 0.318 & 0.595 / 0.221 & 0.066 / 0.833 \\
+B1 & 0.504 / 0.301 & 0.574 / 0.188 & 0.000 / 0.767 \\
+B2 & 0.673 / \textbf{0.000} & 0.397 / \textbf{0.005} & \textbf{0.213} / \textbf{0.100} \\
+B3 & 0.627 / 0.178 & 0.607 / 0.171 & 0.189 / 0.600 \\
+P & \textbf{0.689} / 0.107 & \textbf{0.611} / 0.160 & 0.194 / 0.567 \\
 \bottomrule
 \end{tabular}
 \end{table}

@@ -5,6 +5,17 @@
 \`llncs\`; it must be converted/compiled/visually reviewed under the actual
 RIVF/IEEE conference template before submission.
 
+## IEEE formatting check (non-final builds)
+
+The first IEEEtran draft (`cropstate_camera_ready_ieee.tex`) compiled with
+XeLaTeX but produced **8 pages** (GitHub Actions run 40485805734).
+A condensed working draft (`cropstate_camera_ready_ieee_compact.tex`)
+moves five auxiliary tables and the trade-off figure out of the main text,
+retaining the central retrieval comparison and significance table. Its exact
+page count must be verified by CI before use; no reported historical metric
+was changed. Even a six-page compile requires visual inspection and compliance
+with the official conference template.
+
 ## Important: distinguish three levels of evidence
 
 1. **Legacy manuscript numbers** (below): previously reported in

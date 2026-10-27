@@ -6,6 +6,8 @@ on:
       - "scripts/experiments/build_belief_scenarios.py"
       - "src/cropstate/confidence.py"
       - "tests/test_scenario_calibration.py"
+      - "tests/test_retrieval.py"
+      - "src/cropstate/retrieval.py"
       - ".github/workflows/retrieval-integrity.yml"
   workflow_dispatch:
 
@@ -21,3 +23,5 @@ jobs:
         run: python -m pip install "numpy>=1.26" "scipy>=1.13"
       - name: Verify calibrated stage belief and confidence
         run: PYTHONPATH=src python -m unittest discover -s tests -p 'test_scenario_calibration.py' -v
+      - name: Verify stage reranking without source authority confounding
+        run: PYTHONPATH=src python -m unittest discover -s tests -p 'test_retrieval.py' -v

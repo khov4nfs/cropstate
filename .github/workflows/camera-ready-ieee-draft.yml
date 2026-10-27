@@ -1,0 +1,47 @@
+name: Draft IEEE camera-ready compilation
+
+on:
+  pull_request:
+    paths:
+      - "paper/cropstate_camera_ready_ieee.tex"
+      - "paper/references.bib"
+      - "paper/figures/**"
+      - ".github/workflows/camera-ready-ieee-draft.yml"
+  workflow_dispatch:
+
+jobs:
+  compile-ieee-draft:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile IEEEtran draft with XeLaTeX
+        uses: xu-cheng/latex-action@v3
+        with:
+          working_directory: paper
+          root_file: cropstate_camera_ready_ieee.tex
+          latexmk_use_xelatex: true
+          os: debian
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Report page count (conference cap is 6)
+        run: |
+          python -m pip install pypdf
+          python - <<'PY'
+          from pathlib import Path
+          from pypdf import PdfReader
+          target=Path("paper/cropstate_camera_ready_ieee.pdf")
+          pages=len(PdfReader(str(target)).pages)
+          print(f"IEEE draft page count: {pages} (standard cap 6)")
+          if pages>6:
+              print("WARNING: EXCEEDS SIX-PAGE CAP; draft must be shortened or excess-page fee handled.")
+          print("WARNING: LEGACY RESULT TABLES HAVE NOT BEEN REVERIFIED.")
+          PY
+      - name: Upload non-final PDF and build log
+        uses: actions/upload-artifact@v4
+        with:
+          name: cropstate-ieee-draft-unverified-results
+          path: |
+            paper/cropstate_camera_ready_ieee.pdf
+            paper/cropstate_camera_ready_ieee.log
+          retention-days: 30

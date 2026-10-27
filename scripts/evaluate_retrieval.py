@@ -108,7 +108,11 @@ def main() -> None:
         true_stage = normalize_stage(str(scenario["ground_truth_stage"]))
         predicted_stage = normalize_stage(str(scenario.get("predicted_stage") or true_stage))
         belief = parse_belief(scenario.get("stage_belief"), predicted_stage)
-        confidence = float(scenario.get("confidence") or belief.max())
+        # Zero is a valid low-confidence value; do not turn it into belief.max().
+        confidence_raw = scenario.get("confidence")
+        confidence = float(confidence_raw) if confidence_raw not in (None, "") else float(belief.max())
+        if not np.isfinite(confidence) or not 0.0 <= confidence <= 1.0:
+            raise ValueError(f"Invalid routing confidence for scenario {scenario_id}: {confidence!r}")
         # B0/B2/B3/P share a stage-free query; only B1 (query expansion) gets a stage-bearing query.
         base_query = str(scenario.get("query") or build_topic_query(topic))
         expanded_query = build_topic_query(topic, predicted_stage)

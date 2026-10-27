@@ -21,6 +21,7 @@ from pathlib import Path
 import numpy as np
 
 from cropstate.constants import STAGE_NAMES
+from cropstate.confidence import combined_confidence
 from cropstate.knowledge import load_knowledge_chunks
 
 
@@ -30,6 +31,27 @@ def softmax_np(logits):
     return e / e.sum(axis=1, keepdims=True)
 
 
+def prediction_from_logits(logits, temperature=1.0, confidence_method="combined"):
+    """Return the calibrated belief consumed by retrieval, predicted stage, and routing confidence.
+
+    The same calibrated probabilities must drive both the stage score and the confidence
+    mixture. "top1" is retained only as an explicit historical ablation.
+    """
+    if not np.isfinite(temperature) or temperature <= 0:
+        raise ValueError("temperature must be finite and strictly positive")
+    logits = np.asarray(logits, dtype=np.float64)
+    if logits.shape != (len(STAGE_NAMES),) or not np.all(np.isfinite(logits)):
+        raise ValueError("logits must be a finite vector with one value per stage")
+    calibrated = softmax_np((logits / temperature)[None, :])[0]
+    if confidence_method == "combined":
+        confidence = combined_confidence(calibrated)
+    elif confidence_method == "top1":
+        confidence = float(calibrated.max())
+    else:
+        raise ValueError("confidence_method must be 'combined' or 'top1'")
+    return calibrated, int(calibrated.argmax()), float(confidence)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--logits-index", default="CROPSTATE_RESULTS/novelty/logits/index.json")
@@ -37,6 +59,8 @@ def main():
     parser.add_argument("--corpus", default="CROPSTATE_KNOWLEDGE_BASE/chunks/rice_knowledge_irri_en_nonrestricted.jsonl")
     parser.add_argument("--calibration", default="CROPSTATE_RESULTS/novelty/calibration.json",
                         help="If present, also emit a temperature-calibrated belief column.")
+    parser.add_argument("--confidence-method", choices=("combined", "top1"), default="combined",
+                        help="Confidence used by the adaptive ranker; top1 is a legacy ablation.")
     parser.add_argument("--rel-threshold", type=float, default=0.5)
     parser.add_argument("--min-relevant", type=int, default=3)
     parser.add_argument("--min-incompatible", type=int, default=3)
@@ -55,7 +79,8 @@ def main():
     if calib_path.exists():
         calib = json.loads(calib_path.read_text())
         temperature = float(calib.get(args.model, {}).get("temperature", 1.0))
-    calibrated = softmax_np(logits / temperature)
+    if not np.isfinite(temperature) or temperature <= 0:
+        raise ValueError("Calibration temperature must be finite and positive")
 
     chunks = load_knowledge_chunks(args.corpus, mode="research")
     topics = sorted({c.topic for c in chunks})
@@ -75,9 +100,10 @@ def main():
 
     rows = []
     for i, (img_id, y) in enumerate(zip(image_ids, labels)):
-        belief = beliefs[i]
-        cbelief = calibrated[i]
-        pred = int(belief.argmax())
+        raw_belief = beliefs[i]
+        belief, pred, confidence = prediction_from_logits(
+            logits[i], temperature, args.confidence_method
+        )
         for topic in topics:
             rel, inc = sets_for(topic, int(y))
             if len(rel) < args.min_relevant or len(inc) < args.min_incompatible:
@@ -88,20 +114,26 @@ def main():
                 "ground_truth_stage": STAGE_NAMES[int(y)],
                 "predicted_stage": STAGE_NAMES[pred],
                 "stage_belief": json.dumps([round(float(x), 6) for x in belief]),
-                "calibrated_stage_belief": json.dumps([round(float(x), 6) for x in cbelief]),
-                "confidence": round(float(belief.max()), 6),
+                "raw_stage_belief": json.dumps([round(float(x), 6) for x in raw_belief]),
+                "calibrated_stage_belief": json.dumps([round(float(x), 6) for x in belief]),
+                "confidence": round(confidence, 6),
+                "confidence_method": args.confidence_method,
+                "calibration_temperature": round(float(temperature), 6),
                 "relevant_chunk_ids": "|".join(rel),
                 "incompatible_chunk_ids": "|".join(inc),
             })
 
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
+    if not rows:
+        raise ValueError("No answerable (image, topic) retrieval scenarios were generated")
     with out.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()))
         writer.writeheader()
         writer.writerows(rows)
     print(f"[scenarios] wrote {len(rows)} scenarios over {len({r['topic'] for r in rows})} topics, "
-          f"{len(image_ids)} test images, temperature={temperature:.3f}")
+          f"{len(image_ids)} test images, temperature={temperature:.3f}, "
+          f"confidence={args.confidence_method}")
 
 
 if __name__ == "__main__":

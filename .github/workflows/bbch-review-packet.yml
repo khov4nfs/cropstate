@@ -1,0 +1,47 @@
+name: BBCH independent expert review packet
+
+on:
+  pull_request:
+    paths:
+      - "scripts/prepare_bbch_expert_review.py"
+      - "scripts/score_bbch_expert_review.py"
+      - "tests/test_bbch_expert_review.py"
+      - ".github/workflows/bbch-review-packet.yml"
+      - "data/riceseg_stage_manifest.csv"
+  workflow_dispatch:
+
+jobs:
+  create-blinded-packet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run expert-review protocol unit tests
+        run: python -m unittest discover -s tests -p test_bbch_expert_review.py -v
+      - name: Create stratified blank review tasks from 2900-image weak manifest
+        run: |
+          python scripts/prepare_bbch_expert_review.py \
+            --manifest data/riceseg_stage_manifest.csv \
+            --per-stage 20 --seed 42 --output-dir bbch-review-packet
+      - name: Verify blank tasks do not count as expert validation
+        run: |
+          python scripts/score_bbch_expert_review.py \
+            --admin bbch-review-packet/admin_manifest.csv \
+            --reviewer-1 bbch-review-packet/reviewer_1.csv \
+            --reviewer-2 bbch-review-packet/reviewer_2.csv \
+            --output-dir bbch-review-packet/scored
+          python - <<'PY'
+          import json
+          q=json.load(open("bbch-review-packet/scored/expert_quality_report.json"))
+          assert q["expert_consensus_count"] == 0
+          assert q["paired_completed_count"] == 0
+          print("Human expert annotation still required:",q["task_count"],"tasks")
+          PY
+      - name: Upload packet and status for controlled distribution
+        uses: actions/upload-artifact@v4
+        with:
+          name: rice-bbch-review-packet-blank
+          path: bbch-review-packet/
+          retention-days: 30

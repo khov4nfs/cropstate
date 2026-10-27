@@ -12,6 +12,9 @@ on:
       - "scripts/analyze_retrieval_significance_clustered.py"
       - "scripts/evaluate_retrieval.py"
       - "tests/test_retrieval_reproduction.py"
+      - "src/cropstate/onnx_encoder.py"
+      - "tests/test_onnx_encoder.py"
+      - "requirements-onnx.txt"
       - ".github/workflows/retrieval-integrity.yml"
   workflow_dispatch:
 
@@ -29,5 +32,7 @@ jobs:
         run: PYTHONPATH=src python -m unittest discover -s tests -p 'test_scenario_calibration.py' -v
       - name: Verify stage reranking without source authority confounding
         run: PYTHONPATH=src python -m unittest discover -s tests -p 'test_retrieval.py' -v
+      - name: Verify ONNX FP32 mean-pooling adapter without model downloads
+        run: PYTHONPATH=src python -m unittest discover -s tests -p 'test_onnx_encoder.py' -v
       - name: Verify 420-scenario provenance preflight (synthetic fixtures only)
         run: PYTHONPATH=src python -m unittest discover -s tests -p 'test_retrieval_reproduction.py' -v

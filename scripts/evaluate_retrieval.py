@@ -83,6 +83,9 @@ def main() -> None:
     parser.add_argument("--scenarios", required=True)
     parser.add_argument("--mode", choices=["research", "production", "all"], default="research")
     parser.add_argument("--embedding-model", default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+    parser.add_argument("--embedding-backend", choices=("sentence-transformers", "onnx"),
+                        default="sentence-transformers", help="ONNX FP32 is an explicit alternative execution backend.")
+    parser.add_argument("--onnx-model-dir", default=None, help="Pinned model snapshot path for ONNX backend.")
     parser.add_argument("--depth", type=int, default=50)
     parser.add_argument("--k", type=int, default=5)
     parser.add_argument("--source-weight", type=float, default=0.0,
@@ -98,7 +101,21 @@ def main() -> None:
         parser.error("source-weight and fixed-beta must be non-negative and sum to <= 1")
     chunks = load_knowledge_chunks(args.corpus, mode=args.mode)
     chunk_map = {chunk.chunk_id: chunk for chunk in chunks}
-    retriever = HybridRetriever(chunks, embedding_model=args.embedding_model)
+    encoder = None
+    encoder_metadata = {"backend": args.embedding_backend, "model_id": args.embedding_model}
+    if args.embedding_backend == "onnx":
+        if args.embedding_model != "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2":
+            parser.error("The ONNX adapter is pinned to multilingual MiniLM-L12-v2 only.")
+        from cropstate.onnx_encoder import ONNXSentenceEncoder
+        encoder = ONNXSentenceEncoder(model_dir=args.onnx_model_dir)
+        encoder_metadata.update({
+            "model_sha256": encoder.model_sha256,
+            "tokenizer_sha256": encoder.tokenizer_sha256,
+            "max_seq_length": 128,
+            "pooling": "attention_masked_mean_plus_l2",
+            "note": "Same pretrained model weights, distinct ONNX FP32 execution backend; may differ numerically from PyTorch.",
+        })
+    retriever = HybridRetriever(chunks, embedding_model=args.embedding_model, encoder=encoder)
     scenarios = read_scenarios(Path(args.scenarios))
     rows: list[dict[str, Any]] = []
 
@@ -177,6 +194,7 @@ def main() -> None:
             "fixed_beta": args.fixed_beta,
             "include_general_fallback": args.include_general_fallback,
             "embedding_model": args.embedding_model,
+            "embedding_backend": encoder_metadata,
             "depth": args.depth,
             "mode": args.mode,
         },

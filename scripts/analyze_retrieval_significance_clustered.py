@@ -103,8 +103,20 @@ def main() -> None:
             vals = [diffs[s] for idx in picks for s in clusters[cluster_keys[idx]]]
             boot[b] = np.mean(vals)
         lo, hi = np.percentile(boot, [2.5, 97.5])
-        p = 2.0 * min(float(np.mean(boot <= 0)), float(np.mean(boot >= 0)))
-        return {"diff": observed, "ci95": [float(lo), float(hi)], "p_raw": min(p, 1.0)}
+        # A bootstrap distribution centred on the observed effect does not
+        # directly impose the null; use cluster-wise paired sign flips to
+        # test H0: zero mean effect, then correct the family of 12 tests.
+        # A +1 Monte-Carlo adjustment prevents the impossible p=0.0.
+        cluster_sums = np.array([
+            sum(diffs[s] for s in clusters[c]) for c in cluster_keys
+        ], dtype=float)
+        permutations = rng.choice((-1.0, 1.0), size=(args.n_bootstrap, n_clusters))
+        null_stats = permutations @ cluster_sums / len(scenarios)
+        p = (1 + int(np.count_nonzero(np.abs(null_stats) >= abs(observed)))) / (
+            args.n_bootstrap + 1
+        )
+        return {"diff": observed, "ci95": [float(lo), float(hi)],
+                "p_raw": min(p, 1.0), "p_test": "paired cluster sign-flip"}
 
     comparisons = {}
     flat = []
@@ -147,6 +159,8 @@ def main() -> None:
         "proposed": PROPOSED,
         "clustering": "scenarios resampled by source image id",
         "multiple_comparison_correction": "holm",
+        "p_value_test": "paired cluster sign-flip permutation with +1 correction",
+        "n_signflip_permutations": args.n_bootstrap,
         "paired_bootstrap": comparisons,
         "error_stratified": stratified,
     }

@@ -112,7 +112,7 @@ def write_camera_ready_table(evaluation: Path, significance: Path, path: Path) -
         diff = comparisons[key]
         lo, hi = diff["ci95"]
         lines.append(f"- {label}: Δ={diff['diff']:+.3f}, 95% CI [{lo:+.3f}, {hi:+.3f}], "
-                     f"Holm-adjusted p={diff['p_holm']:.4g}.")
+                     f"Holm-adjusted cluster sign-flip p={diff['p_holm']:.4f}.")
     lines += [
         "",
         "A nonsignificant ranking difference is **not proof of equivalence**.",
@@ -133,6 +133,10 @@ def main() -> None:
     parser.add_argument("--model", default="resnet18")
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--embedding-model", default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+    parser.add_argument("--embedding-backend", choices=("sentence-transformers", "onnx"),
+                        default="sentence-transformers")
+    parser.add_argument("--onnx-model-dir", type=Path,
+                        help="Locally pinned model snapshot when --embedding-backend=onnx")
     parser.add_argument("--expected-scenarios", type=int, default=420)
     parser.add_argument("--expected-images", type=int, default=199)
     parser.add_argument("--fixed-beta", type=float, default=0.20)
@@ -200,6 +204,9 @@ def main() -> None:
     run([sys.executable, "scripts/evaluate_retrieval.py",
          "--corpus", str(args.corpus.resolve()), "--scenarios", str(scenarios.resolve()),
          "--embedding-model", args.embedding_model,
+         "--embedding-backend", args.embedding_backend,
+         * (["--onnx-model-dir", str(args.onnx_model_dir.resolve())]
+            if args.onnx_model_dir else []),
          "--mode", "research", "--source-weight", "0",
          "--fixed-beta", str(args.fixed_beta), "--output", str(evaluation.resolve())])
     run([sys.executable, "scripts/analyze_retrieval_significance_clustered.py",
@@ -211,10 +218,17 @@ def main() -> None:
         "corpus_sha256": digest(args.corpus),
         "scenario_sha256": digest(scenarios),
         "evaluation_sha256": digest(evaluation),
+        "significance_sha256": digest(significance),
+        "embedding_backend_metadata": json.loads(evaluation.read_text())[
+            "evaluation_config"]["embedding_backend"],
+        "n_bootstrap": args.bootstrap,
+        "p_value_test": "paired image-cluster sign-flip with +1 correction",
         "calibration_sha256": digest(args.calibration) if args.calibration else None,
         "scenario_count": checked["scenario_count"],
         "contributing_images": checked["contributing_images"],
         "generated_with": "scripts/reproduce_retrieval_benchmark.py",
+        "embedding_backend": args.embedding_backend,
+        "embedding_model": args.embedding_model,
         "allow_legacy_beliefs": args.allow_legacy_beliefs,
         "notes": "Automatic stage compatibility only; requires independent expert evaluation.",
     }

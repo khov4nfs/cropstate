@@ -1,4 +1,4 @@
-% SHORT IEEE 6-page target. Historical results unverified, not for final submission.
+% Camera-ready source: VERIFIED ONNX FP32 controlled-protocol retrieval; weak-label limitations apply.
 % !TeX program = xelatex
 \documentclass[conference]{IEEEtran}
 
@@ -29,7 +29,7 @@ Classification and Confidence-Aware Stage-Gated Retrieval}
 \maketitle
 
 \begin{abstract}
-Agricultural recommendations depend on crop development, so a decision-support system must first recognize the growth stage and then retrieve stage-appropriate guidance. This paper presents CropState-Vision, which classifies field images into six BBCH-derived rice macro-stages and uses the full stage distribution to gate evidence retrieval. Beyond raw accuracy, our emphasis is evaluation reliability and retrieval safety. On a 2{,}900-image benchmark derived from RiceSEG, we first audit the splits for near-duplicate leakage and detect no cross-split near-duplicates at perceptual-hash thresholds up to 10, reducing concern that the reported scores are inflated by near-duplicate memorization. Using a fixed-split, three-seed protocol we compare three training objectives for a ResNet-18 classifier: cross-entropy reaches 0.800 accuracy, an ordinal-aware loss leaves overall accuracy unchanged but stabilizes recall on the under-represented reproductive stage (identical across the three seeds, $\sigma=0.000$ versus $0.052$ for cross-entropy), and a focal loss degrades calibration and is kept only as a negative ablation. We recast confidence handling as selective prediction: abstaining on the least-confident ${\sim}46\%$ of cases roughly halves the error rate ($0.205\to0.099$). Finally, on 420 automatically-derived retrieval scenarios, confidence-adaptive soft gating remains competitive in ranking quality while reducing stage-incompatible retrievals by approximately 75\% relative to query expansion; an error-stratified analysis, with paired image-clustered bootstrap tests, shows this ranking-versus-safety trade-off holds when the prediction is correct or off by one adjacent stage, while hard filtering stays safest under rare non-adjacent errors. Because these relevance labels are auto-derived from the same stage-compatibility metadata the re-ranker uses, we interpret the retrieval results as mechanism validation---consistency with stage-compatibility metadata---rather than evidence of expert-judged agronomic effectiveness. CropState-Vision claims no new architecture or dataset; the contribution is a reliable, safety-oriented evaluation of the full classification-to-retrieval pipeline.
+Crop development informs rice management decisions. CropState-Vision classifies field images into six BBCH-derived macro-stages and uses the full probability distribution to gate evidence retrieval. On 2{,}900 RiceSEG-derived images, fixed-split, three-seed ResNet-18 cross-entropy accuracy is 0.800 against morphology-derived weak labels, not expert-validated BBCH stages. We rerun 420 automatically labeled retrieval scenarios (199 test images) using validation-temperature-calibrated belief, entropy/margin confidence, topic-exact candidate pools, and no source-authority bonus. Adaptive reranking achieves nDCG@5 0.667 (query expansion: 0.510) and SIRR@5 0.124 (query expansion: 0.285). Hard filtering attains the lowest SIRR@5 (0.002), particularly important for the six nonadjacent stage errors. Image-clustered bootstrap CIs and paired sign-flip tests quantify the differences. The FP32 ONNX export of the same multilingual MiniLM model reproduces all legacy-protocol aggregate metrics exactly before the protocol correction. Relevance and incompatibility judgments derive from the same metadata used by stage gating; these findings validate the ranking mechanism, not expert-judged agronomic effectiveness.
 
 \begin{IEEEkeywords}
 rice growth stage, BBCH, image classification, ordinal loss, calibration,
@@ -48,8 +48,8 @@ CropState-Vision represents crop development as a distribution over stages rathe
 This paper asks two questions. First, how reliably can six rice macro-stages be recognized from field images, once the benchmark is audited for leakage and the classifier is evaluated across seeds rather than on a single lucky run? Second, is confidence-aware soft gating more robust than top-1 hard filtering when the image-based prediction is uncertain or wrong? The contributions are:
 \begin{enumerate}
     \item a near-duplicate-audited benchmark: an average-hash (aHash) near-duplicate sweep over 2{,}900 images detects no cross-split pairs at Hamming thresholds up to 10 under an aHash-grouped split; this property is partly enforced by construction and does not establish field-level independence;
-    \item a reliable stage-classification evaluation using a fixed-split, multi-seed protocol that separates initialization variance from split variance, showing that an ordinal-aware loss stabilizes reproductive-stage recall without changing accuracy, plus a selective-prediction analysis showing the error rate roughly halves when the model abstains on its least-confident cases;
-    \item a confidence-aware soft-gating retriever that uses the full visual distribution instead of only the top-1 stage, and an end-to-end evaluation over 420 auto-derived scenarios---with paired, image-clustered bootstrap tests---showing it stays competitive in ranking quality while cutting stage-incompatible retrievals by approximately 75\% relative to the strongest baseline;
+    \item a fixed-split, multi-seed evaluation measuring initialization variability conditional on one partition, not split variance, showing that an ordinal-aware loss stabilizes reproductive-stage recall without changing accuracy, plus a selective-prediction analysis showing the error rate roughly halves when the model abstains on its least-confident cases;
+    \item a belief-based adaptive retriever evaluated in 420 metadata-derived scenarios, raising nDCG@5 from 0.510 to 0.667 and lowering SIRR@5 from 0.285 to 0.124 under the controlled candidate and authority protocol;
     \item an explicit, honest account of the limitations---an underpowered reproductive subset reported descriptively rather than pooled, retrieval labels auto-derived from the same metadata the re-ranker uses (mechanism validation, not expert-judged effectiveness), and simulated temporal fusion---that bound how far these results can be pushed.
 \end{enumerate}
 
@@ -121,7 +121,7 @@ To reduce the concern that scores are inflated by near-duplicate memorization, w
 
 \subsection{Knowledge Base and Retrieval Labels}
 
-The retrieval evaluation runs over the non-restricted subset of an English-language corpus of machine-curated chunks built from the publicly available IRRI Rice Knowledge Bank, each tagged with a care topic and a stage-compatibility vector; the corpus is used for research under the source's terms, and derived chunk tags are released with the code (Section~\ref{sec:availability}). For each (test image, care topic) pair we form a scenario using the image's six-class belief; chunks whose stage-compatibility with the ground-truth stage is high are labeled relevant and stage-incompatible chunks are labeled inappropriate. Keeping only (topic, stage) pairs the corpus can answer (at least three relevant and three incompatible chunks) yields 420 scenarios. Crucially, these relevance labels are \emph{auto-derived from the same stage-compatibility metadata that the proposed re-ranker consumes}, so the evaluation is a \emph{mechanism validation}---it measures consistency with the designed metadata---and cannot, on its own, establish agronomic relevance or recommendation effectiveness. We accordingly avoid expert-effectiveness language and treat every retrieval number as a preliminary automated stage-compatibility result pending an independent, expert-annotated relevance set.
+The retrieval evaluation runs over the non-restricted subset of an English-language corpus of machine-curated chunks built from the publicly available IRRI Rice Knowledge Bank, each tagged with a care topic and a stage-compatibility vector; the corpus is used for research under the source's terms, and derived chunk tags are saved in the external research artifacts (Section~\ref{sec:availability}). For each (test image, care topic) pair we form a scenario using the image's six-class belief; chunks whose stage-compatibility with the ground-truth stage is high are labeled relevant and stage-incompatible chunks are labeled inappropriate. Keeping only (topic, stage) pairs the corpus can answer (at least three relevant and three incompatible chunks) yields 420 scenarios. Crucially, these relevance labels are \emph{auto-derived from the same stage-compatibility metadata that the proposed re-ranker consumes}, so the evaluation is a \emph{mechanism validation}---it measures consistency with the designed metadata---and cannot, on its own, establish agronomic relevance or recommendation effectiveness. We accordingly avoid expert-effectiveness language and treat every retrieval number as a preliminary automated stage-compatibility result pending an independent, expert-annotated relevance set.
 
 \subsection{Vision Models and Loss Functions}
 
@@ -134,13 +134,14 @@ The five comparison methods are summarized below.
 
 The comparison uses B0 (ungated hybrid BM25+dense RRF), B1 (top-1 stage query expansion), B2 (top-1 hard filtering), B3 (fixed-soft stage reranking), and P (confidence-adaptive belief-based reranking).
 
-All methods use the same corpus, chunking, embedding model, candidate depth, fixed topics, and top-$k$; only the stage-conditioning mechanism differs.
+All methods share the same 173 IRRI chunks, topic-exact candidates (no unjudged general-care fallback), BM25/dense RRF depth 50, and $k=5$. For a controlled comparison source-authority weight is zero; B3 uses fixed $\beta=0.20$. The six-way belief is temperature-scaled on validation ($T=0.875$), and adaptive confidence combines normalized entropy concentration (0.6) and top-two margin (0.4). We use the same multilingual MiniLM-L12-v2 model in its FP32 ONNX export (128-token cap, masked mean pooling and L2 normalization); the legacy-protocol replay exactly reproduces all historical aggregate scores.
 
 \subsection{Evaluation Metrics and Statistics}
 
 Vision metrics are accuracy, macro-F1, per-class recall, ECE, Brier score, and Mean Absolute Stage Distance, $\mathrm{MASD}=\frac{1}{N}\sum_j|\mathrm{index}(\hat{\phi}_j)-\mathrm{index}(\phi_j^*)|$, which separates an adjacent mistake from one several stages off. Deployment behavior is summarized by selective prediction: after temperature scaling on the validation split, we rank test images by the confidence proxy and, for each coverage level, report the selective risk ($1-$ selective accuracy). We summarize the curve by the normalized area under the risk--coverage curve (AURC), the trapezoidal integral of selective risk over coverage in $[0,1]$, where lower is better. Retrieval metrics are Precision@$k$, Recall@$k$, nDCG@$k$, and SIRR@$k$ ($k=5$). Because methods are evaluated on the same items, comparisons are paired: for vision we report bootstrap 95\% confidence intervals \cite{efron1993bootstrap} and McNemar's test \cite{mcnemar1947note} for paired binary outcomes. The reproductive-recall behavior across the three seeds reuses the same 24 test images, so those repeated predictions are \emph{not} independent observations; we therefore report them descriptively (per-seed recall and its spread) and do not pool them for a single significance test. For retrieval, because one test image spawns several topic scenarios, we use a paired bootstrap that \emph{resamples whole images} (clusters of scenarios) and apply a Holm correction across the family of method comparisons, so the reported confidence intervals respect the non-independence of same-image scenarios.
 
-% CAMERA-READY REPRODUCTION HOLD: Tables retain legacy reported numbers.\n% Re-run 420 scenarios with frozen corpus/logits after calibration, source-weight,\n% and candidate-universe corrections (see docs/RIVF26_REVIEWER_REVISION.md).\n\section{Results}
+% Metadata-derived retrieval tables rerun on 2026-10-27; domain labels remain weak.
+\section{Results}
 
 \subsection{Stage Classification (RQ1)}
 
@@ -188,69 +189,69 @@ This analysis uses the primary ResNet-18 cross-entropy checkpoint (seed 42), wit
 
 \subsection{Stage-Gated Retrieval (RQ2)}
 
-Table~\ref{tab:retrieval} reports the aggregate over all 420 auto-derived scenarios, and Table~\ref{tab:retrsig} reports the paired, image-clustered bootstrap differences (P minus baseline) with Holm-adjusted $p$-values. Adaptive soft gating (P) significantly outperforms the ungated baseline (B0) and the fixed-soft baseline (B3) on every metric (all 95\% CIs exclude zero, $p_{\text{Holm}}<0.001$). Against the strongest baseline, query expansion (B1), P is statistically tied on nDCG ($-0.021$, CI $[-0.065,+0.021]$) and recall ($+0.006$, CI $[-0.029,+0.042]$) and loses raw precision ($-0.070$, $p_{\text{Holm}}=0.005$), but reduces SIRR from 0.159 to 0.038---a difference of $-0.121$ ($p_{\text{Holm}}<0.001$), i.e.\ approximately a 75\% relative reduction in stage-incompatible evidence, the property most relevant to safe advisory retrieval. Hard filtering (B2) achieves the lowest SIRR (0.002) but at a substantial nDCG cost. The retrieval results shows the trade-off: P sits near the oracle in the high-nDCG, low-SIRR corner, while B1 attains the best ranking quality at the worst stage safety.
+Table~\ref{tab:retrieval} summarizes 420 automatically labeled scenarios; Table~\ref{tab:retrsig} reports paired differences with 95\% image-cluster bootstrap CIs and Holm-adjusted cluster sign-flip $p$-values (5{,}000 draws; 199 images). Against B1 query expansion, adaptive reranking increases nDCG@5 from 0.510 to 0.667 while reducing SIRR@5 from 0.285 to 0.124. Hard filtering retains the lowest SIRR@5 (0.002). Changes to the candidate universe, calibrated beliefs and source authority make these numbers \emph{incomparable} with legacy-protocol scores, although the encoder reproduces historical metrics when legacy settings are restored. Metadata-derived SIRR is not an independent measure of agronomic safety.
 
 \begin{table}[t]
 \centering
-\caption{Paired, image-clustered bootstrap differences of the proposed adaptive gating (P) minus each baseline over 420 scenarios, with 95\% CIs and Holm-adjusted $p$-values. The bootstrap resamples whole test images (199 clusters) to respect same-image scenarios. For nDCG/recall/precision, positive favors P; for SIRR (lower is safer), negative favors P.}
+\caption{P minus baselines: clustered bootstrap 95\% CIs and Holm-adjusted paired cluster sign-flip $p$-values; 5{,}000 draws and 199 images. SIRR lower is better.}
 \label{tab:retrsig}
 \small
 \begin{tabular}{llcc}
 \toprule
 \textbf{Comparison} & \textbf{Metric} & \textbf{Diff (95\% CI)} & \textbf{$p_{\text{Holm}}$} \\
 \midrule
-P vs.\ B0 & nDCG@5 & $+0.149$ [$+0.122$, $+0.177$] & $<0.001$ \\
-P vs.\ B0 & Recall@5 & $+0.080$ [$+0.055$, $+0.105$] & $<0.001$ \\
-P vs.\ B0 & SIRR@5 & $-0.098$ [$-0.122$, $-0.074$] & $<0.001$ \\
+P vs.\ B0 & nDCG@5 & $+0.167$ [$+0.125$, $+0.209$] & 0.0024 \\
+P vs.\ B0 & Recall@5 & $+0.130$ [$+0.093$, $+0.168$] & 0.0024 \\
+P vs.\ B0 & SIRR@5 & $-0.182$ [$-0.221$, $-0.144$] & 0.0024 \\
 \addlinespace
-P vs.\ B1 & nDCG@5 & $-0.021$ [$-0.065$, $+0.021$] & 0.68 \\
-P vs.\ B1 & Recall@5 & $+0.006$ [$-0.029$, $+0.042$] & 0.74 \\
-P vs.\ B1 & Precision@5 & $-0.070$ [$-0.111$, $-0.027$] & 0.005 \\
-P vs.\ B1 & SIRR@5 & $-0.121$ [$-0.152$, $-0.090$] & $<0.001$ \\
+P vs.\ B1 & nDCG@5 & $+0.156$ [$+0.107$, $+0.207$] & 0.0024 \\
+P vs.\ B1 & Recall@5 & $+0.070$ [$+0.024$, $+0.119$] & 0.0062 \\
+P vs.\ B1 & Precision@5 & $+0.106$ [$+0.063$, $+0.151$] & 0.0024 \\
+P vs.\ B1 & SIRR@5 & $-0.161$ [$-0.200$, $-0.123$] & 0.0024 \\
 \addlinespace
-P vs.\ B3 & nDCG@5 & $+0.049$ [$+0.033$, $+0.066$] & $<0.001$ \\
-P vs.\ B3 & Recall@5 & $+0.036$ [$+0.024$, $+0.047$] & $<0.001$ \\
-P vs.\ B3 & SIRR@5 & $-0.035$ [$-0.045$, $-0.026$] & $<0.001$ \\
+P vs.\ B3 & nDCG@5 & $+0.050$ [$+0.029$, $+0.072$] & 0.0024 \\
+P vs.\ B3 & Recall@5 & $+0.037$ [$+0.020$, $+0.055$] & 0.0024 \\
+P vs.\ B3 & SIRR@5 & $-0.058$ [$-0.076$, $-0.040$] & 0.0024 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \begin{table}[t]
 \centering
-\caption{Retrieval over 420 auto-derived scenarios (end-to-end image-based; oracle uses ground-truth stage as an upper bound). Labels are auto-derived from stage-compatibility, not domain-reviewed. Best non-oracle value per column in bold; SIRR lower is better.}
+\caption{Controlled-protocol retrieval: 420 metadata-derived scenarios, 199 images, topic-exact candidates, authority weight 0, ONNX FP32 MiniLM. Bold: best non-oracle. SIRR is metadata-defined incompatibility, not agronomic safety.}
 \label{tab:retrieval}
 \small
 \begin{tabular}{lcccc}
 \toprule
 \textbf{Method} & \textbf{P@5} & \textbf{R@5} & \textbf{nDCG@5} & \textbf{SIRR@5}$\downarrow$ \\
 \midrule
-B0: Ungated hybrid & 0.225 & 0.118 & 0.165 & 0.136 \\
-B1: Query expansion & \textbf{0.370} & 0.192 & \textbf{0.335} & 0.159 \\
-B2: Hard filter & 0.266 & 0.180 & 0.259 & \textbf{0.002} \\
-B3: Fixed soft re-ranking & 0.260 & 0.163 & 0.265 & 0.073 \\
-P: Adaptive re-ranking & 0.300 & \textbf{0.198} & 0.314 & 0.038 \\
+B0: Ungated hybrid & 0.521 & 0.256 & 0.500 & 0.306 \\
+B1: Query expansion & 0.534 & 0.316 & 0.510 & 0.285 \\
+B2: Hard filter & 0.575 & 0.360 & 0.611 & \textbf{0.002} \\
+B3: Fixed soft & 0.601 & 0.349 & 0.617 & 0.182 \\
+P: Adaptive & \textbf{0.640} & \textbf{0.386} & \textbf{0.667} & 0.124 \\
 \midrule
-Oracle (stage upper bound) & 0.327 & 0.222 & 0.349 & 0.022 \\
+Oracle & 0.688 & 0.433 & 0.723 & 0.080 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Table~\ref{tab:strat} stratifies the same scenarios by whether the image-based prediction is correct, off by one adjacent stage, or off by two or more, and---following the review---now includes the strongest baseline, query expansion (B1), in every stratum. The comparison is more nuanced than a clean ``P wins'' story. On correct cases (330 scenarios), P and B1 are effectively tied on nDCG (0.334 vs 0.332), but P reaches it with far lower SIRR (0.034 vs 0.174). On adjacent-error cases (84 scenarios), B1 actually attains the highest nDCG (0.372 vs P's 0.246), again at markedly higher SIRR (0.074 vs 0.033). So P's advantage in the common correct/adjacent regime ($414/420$ cases) is not ``highest ranking quality'' but the best ranking-\emph{versus}-safety trade-off: competitive nDCG at three-to-five times lower stage-incompatible retrieval. On the 6 non-adjacent errors the picture inverts toward hard filtering, which yields the best non-oracle nDCG (0.184) and the lowest SIRR (0.100 versus P's 0.300), because when the vision model is confidently wrong by several stages soft gating overweights the incorrect stage. Although $n=6$ is too small for a statistical claim, it shows adaptive gating is not uniformly safest---its value is concentrated where the belief is right or close.
+Table~\ref{tab:strat} stratifies the same scenarios. On correct-stage scenarios ($n=330$), adaptive reranking reaches nDCG@5 0.689 versus B1 0.504. On adjacent errors ($n=84$), it also improves nDCG over B1, but for the six nonadjacent errors its SIRR@5 rises to 0.567 versus 0.100 under hard filtering. The latter stratum is too small for inference but exposes the remaining failure mode of confident stage errors.
 
 \begin{table}[t]
 \centering
-\caption{nDCG@5 / SIRR@5 stratified by vision error condition (420 scenarios), including the strongest baseline B1. On correct/adjacent cases B1 attains the highest raw nDCG but at markedly higher SIRR; adaptive gating (P) offers the best ranking-versus-safety trade-off, while hard filtering (B2) is safest under rare non-adjacent errors. Bold marks the best non-oracle nDCG and the lowest SIRR per stratum.}
+\caption{nDCG@5 / metadata-defined SIRR@5 by vision error condition. Bold: best non-oracle nDCG and minimum SIRR per stratum; nonadjacent $n=6$ is underpowered.}
 \label{tab:strat}
 \small
 \begin{tabular}{lccc}
 \toprule
 \textbf{Method} & \textbf{Correct ($n{=}330$)} & \textbf{Adjacent ($n{=}84$)} & \textbf{Non-adj. ($n{=}6$)} \\
 \midrule
-B0: Ungated & 0.162 / 0.146 & 0.185 / 0.074 & 0.052 / 0.433 \\
-B1: Query expansion & 0.332 / 0.174 & \textbf{0.372} / 0.074 & 0.000 / 0.500 \\
-B2: Hard filter & 0.276 / \textbf{0.000} & 0.195 / \textbf{0.005} & \textbf{0.184} / \textbf{0.100} \\
-B3: Fixed soft & 0.277 / 0.073 & 0.228 / 0.057 & 0.135 / 0.300 \\
-P: Adaptive & \textbf{0.334} / 0.034 & 0.246 / 0.033 & 0.174 / 0.300 \\
+B0: Ungated hybrid & 0.484 / 0.318 & 0.595 / 0.221 & 0.066 / 0.833 \\
+B1: Query expansion & 0.504 / 0.301 & 0.574 / 0.188 & 0.000 / 0.767 \\
+B2: Hard filter & 0.673 / \textbf{0.000} & 0.397 / \textbf{0.005} & \textbf{0.213} / \textbf{0.100} \\
+B3: Fixed soft & 0.627 / 0.178 & 0.607 / 0.171 & 0.189 / 0.600 \\
+P: Adaptive & \textbf{0.689} / 0.107 & \textbf{0.611} / 0.160 & 0.194 / 0.567 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -262,7 +263,7 @@ P: Adaptive & \textbf{0.334} / 0.034 & 0.246 / 0.033 & 0.174 / 0.300 \\
 \section{Discussion}
 Under a single fixed group split, a ResNet-18 achieves about 0.80 accuracy against \emph{weakly derived} BBCH macro-stage labels. Ordinal loss changes overall accuracy negligibly but gives identical reproductive recall (0.917) across three seeds on the same 24 test images; this is descriptive within-split stability, not statistically established improvement or cross-field generalization. Grain filling (10 test images) remains underpowered.
 
-Adaptive soft gating offers a ranking-versus-incompatibility operating point, not uniform dominance: against query expansion its reported nDCG is 0.314 versus 0.335 and its SIRR is 0.038 versus 0.159, with lower precision. Hard filtering retains the lowest SIRR; rare non-adjacent visual errors may favor hard filtering. Because relevance and incompatibility are derived from the same stage-compatibility metadata consumed by the ranker, results validate internal stage metadata consistency rather than independently judged agronomic effectiveness.
+Adaptive reranking outperforms query expansion, fixed-soft and ungated retrieval on metadata-defined nDCG, recall and precision while lowering SIRR, but this is not universal safety: hard filtering retains the lowest SIRR, particularly in the few nonadjacent errors. Because automated relevance labels share stage-compatibility metadata with the reranker, independent expert review remains necessary to establish substantive agronomic effectiveness.
 
 \section{Limitations and Future Work}
 The 2,900 RiceSEG-derived macro-stage labels depend on canopy cover, panicle fraction and senescence thresholds, not independent expert BBCH annotation; 1,134 images are flagged for review. Hash-aware parent grouping prevents detected aHash near-duplicate pairs crossing splits at the configured threshold but does not establish new-field, season or device independence. The fixed-split three-seed protocol measures training variability conditioned on one partition, and post-hoc selective prediction operating points require validation-based threshold selection. Future work is expert BBCH review, independent relevance judgments, acquisition-grouped external testing, calibrated threshold selection and systematic ablations of adaptive stage weight versus a validation-tuned fixed weight. Chemical or regulatory advice remains outside unattended deployment.
@@ -273,12 +274,12 @@ Farm images can reveal location, farm layout, or other information the grower ma
 
 \section{Conclusion}
 
-CropState-Vision recognizes six BBCH-derived rice growth stages from field images and uses the full stage distribution to gate evidence retrieval. On a 2{,}900-image benchmark whose splits show no detected cross-split near-duplicates at perceptual-hash thresholds up to 10, a fixed-split, multi-seed study shows a fine-tuned ResNet-18 reaches 0.800 accuracy, and among training objectives an ordinal-aware loss stabilizes reproductive-stage recall without changing accuracy while a focal loss degrades calibration. Casting confidence as selective prediction roughly halves the error rate when the model abstains on its least-confident cases. On a preliminary automated evaluation over 420 auto-derived scenarios, adaptive soft gating stays competitive with the strongest baseline in ranking quality (statistically tied on nDCG and recall under an image-clustered bootstrap) while cutting stage-incompatible retrievals by about 75\%, with a clearly bounded exception under rare non-adjacent errors. Two honesty caveats govern these claims: the reproductive-recall result is across-seed stability rather than a significant increase at this sample size, and the retrieval labels are auto-derived from the same metadata the re-ranker uses, making the study a mechanism validation rather than domain-reviewed effectiveness. An expert-annotated relevance set and field- or season-grouped metadata are the two items that would convert these findings into deployment-grade evidence.
+CropState-Vision combines weakly supervised six-stage rice classification with confidence-adaptive retrieval. A fixed-split three-seed evaluation yields approximately 0.800 vision accuracy against inferred stages; BBCH labels are not expert-verified. With corrected retrieval settings and the same MiniLM model executed as ONNX FP32, adaptive gating reaches nDCG@5=0.667 (B1 0.510) and SIRR@5=0.124 (B1 0.285) over 420 scenarios. Hard filtering retains lower incompatibility and large stage errors remain risky. Machine-derived relevance and a single dataset split preclude claims of real-world safety or field-level generalization; these require independent experts.
 
 \section{Data and Code Availability}
 \label{sec:availability}
 
-The image benchmark is derived from the publicly available RiceSEG dataset; we use it for research under its original terms and do not redistribute the raw images. Our contribution over the source is the six weak macro-stage labels inferred from RiceSEG segmentation-mask morphology, the fixed group split (2{,}400/237/263, seed 42), and the near-duplicate audit. The knowledge corpus is built from the publicly available IRRI Rice Knowledge Bank and is used under the source's terms. To support reproduction, the stage mapping, the split manifest, the derived stage-compatibility tags, the training and evaluation code (including the perceptual-hash audit, the selective-prediction analysis, and the image-clustered bootstrap used for Table~\ref{tab:retrsig}), and the aggregated result files will be released in a public repository upon publication, or are available from the authors on request pending license and metadata clean-up. No expert-annotated relevance set is released because none yet exists; constructing one is stated future work.
+The image benchmark derives from RiceSEG segmentation masks under its original access terms; no source images are redistributed. Our BBCH macro-stage labels are heuristic weak labels. The 173-chunk IRRI knowledge corpus is machine-curated for research; its provenance, input/output checksums and fixed scenario IDs are recorded in external reproducibility artifacts alongside the evaluation code. No independent expert relevance judgments are available.
 
 \bibliographystyle{IEEEtran}
 \bibliography{references}

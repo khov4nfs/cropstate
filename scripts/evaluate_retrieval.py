@@ -85,9 +85,17 @@ def main() -> None:
     parser.add_argument("--embedding-model", default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
     parser.add_argument("--depth", type=int, default=50)
     parser.add_argument("--k", type=int, default=5)
+    parser.add_argument("--source-weight", type=float, default=0.0,
+                        help="Authority bonus applied only to soft rerankers; default zero to isolate stage gating.")
+    parser.add_argument("--fixed-beta", type=float, default=0.20,
+                        help="Fixed-soft weight; tune on validation scenarios, not test.")
+    parser.add_argument("--include-general-fallback", action="store_true",
+                        help="Include general_crop_care chunks; evaluate their relevance explicitly if enabled.")
     parser.add_argument("--output", default="results/retrieval_evaluation.json")
     args = parser.parse_args()
 
+    if not 0.0 <= args.source_weight < 1.0 or not 0.0 <= args.fixed_beta <= 1.0 - args.source_weight:
+        parser.error("source-weight and fixed-beta must be non-negative and sum to <= 1")
     chunks = load_knowledge_chunks(args.corpus, mode=args.mode)
     chunk_map = {chunk.chunk_id: chunk for chunk in chunks}
     retriever = HybridRetriever(chunks, embedding_model=args.embedding_model)
@@ -108,17 +116,32 @@ def main() -> None:
         relevant = {document_id for document_id, grade in relevance.items() if grade > 0}
         incompatible = parse_ids(scenario.get("incompatible_chunk_ids", scenario.get("nonmatching_chunk_ids")))
 
-        bm25_ranked, dense_ranked = retriever.retrieve(base_query, depth=args.depth, topic=topic)
+        bm25_ranked, dense_ranked = retriever.retrieve(
+            base_query, depth=args.depth, topic=topic,
+            include_general_fallback=args.include_general_fallback,
+        )
         base_scores = minmax(reciprocal_rank_fusion([bm25_ranked, dense_ranked]))
-        expanded_bm25, expanded_dense = retriever.retrieve(expanded_query, depth=args.depth, topic=topic)
+        expanded_bm25, expanded_dense = retriever.retrieve(
+            expanded_query, depth=args.depth, topic=topic,
+            include_general_fallback=args.include_general_fallback,
+        )
         expanded_scores = minmax(reciprocal_rank_fusion([expanded_bm25, expanded_dense]))
         methods = {
             "B0_ungated": sorted(base_scores, key=base_scores.get, reverse=True),
             "B1_query_expansion": sorted(expanded_scores, key=expanded_scores.get, reverse=True),
             "B2_hard_filter": hard_filter(base_scores, chunk_map, int(np.argmax(belief))),
-            "B3_fixed_soft": rerank(base_scores, chunk_map, belief, confidence, fixed_beta=0.20),
-            "P_adaptive_soft": rerank(base_scores, chunk_map, belief, confidence),
-            "oracle_reference": rerank(base_scores, chunk_map, one_hot(true_stage), 1.0),
+            "B3_fixed_soft": rerank(
+                base_scores, chunk_map, belief, confidence,
+                source_weight=args.source_weight, fixed_beta=args.fixed_beta,
+            ),
+            "P_adaptive_soft": rerank(
+                base_scores, chunk_map, belief, confidence,
+                source_weight=args.source_weight,
+            ),
+            "oracle_reference": rerank(
+                base_scores, chunk_map, one_hot(true_stage), 1.0,
+                source_weight=args.source_weight,
+            ),
         }
         for method, ranking in methods.items():
             precision, recall = precision_recall_at_k(ranking, relevant, args.k)
@@ -142,7 +165,19 @@ def main() -> None:
             metric: float(np.mean([row[metric] for row in subset]))
             for metric in ["precision_at_k", "recall_at_k", "ndcg_at_k", "sirr_at_k"]
         }
-    payload = {"k": args.k, "scenario_count": len(scenarios), "summary": summary, "rows": rows}
+    payload = {
+        "k": args.k,
+        "scenario_count": len(scenarios),
+        "evaluation_config": {
+            "source_weight": args.source_weight,
+            "fixed_beta": args.fixed_beta,
+            "include_general_fallback": args.include_general_fallback,
+            "embedding_model": args.embedding_model,
+            "depth": args.depth,
+            "mode": args.mode,
+        },
+        "summary": summary, "rows": rows,
+    }
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")

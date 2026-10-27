@@ -31,11 +31,12 @@ Classification and Confidence-Aware Stage-Gated Retrieval}
 \begin{abstract}
 Crop development informs rice management decisions. CropState-Vision classifies field images into six BBCH-derived macro-stages and uses the full probability distribution to gate evidence retrieval. On 2{,}900 RiceSEG-derived images, fixed-split, three-seed ResNet-18 cross-entropy accuracy is 0.800 against morphology-derived weak labels, not expert-validated BBCH stages. We rerun 420 automatically labeled retrieval scenarios (199 test images) using validation-temperature-calibrated belief, entropy/margin confidence, topic-exact candidate pools, and no source-authority bonus. Adaptive reranking achieves nDCG@5 0.667 (query expansion: 0.510) and SIRR@5 0.124 (query expansion: 0.285). Hard filtering attains the lowest SIRR@5 (0.002), particularly important for the six nonadjacent stage errors. Image-clustered bootstrap CIs and paired sign-flip tests quantify the differences. The FP32 ONNX export of the same multilingual MiniLM model reproduces all legacy-protocol aggregate metrics exactly before the protocol correction. Relevance and incompatibility judgments derive from the same metadata used by stage gating; these findings validate the ranking mechanism, not expert-judged agronomic effectiveness.
 
+\end{abstract}
+
 \begin{IEEEkeywords}
 rice growth stage, BBCH, image classification, ordinal loss, calibration,
 selective prediction, stage-aware retrieval, data leakage
 \end{IEEEkeywords}
-\end{abstract}
 
 \section{Introduction}
 
@@ -152,6 +153,7 @@ All three losses beat the majority-class reference (accuracy 0.335) by a wide ma
 \caption{Vision on the 2{,}900-image derived-stage benchmark. Three training seeds (42, 7, 123) on one fixed split: mean $\pm$ std. Labels are morphology-derived, not expert verified.}
 \label{tab:results}
 \small
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{lccc}
 \toprule
 \textbf{Model / loss} & \textbf{Acc.} & \textbf{Macro-F1} & \textbf{ECE}$\downarrow$ \\
@@ -162,6 +164,7 @@ ResNet-18 ordinal & \textbf{0.801 $\pm$ 0.013} & \textbf{0.796 $\pm$ 0.018} & 0.
 ResNet-18 focal & 0.767 $\pm$ 0.016 & 0.757 $\pm$ 0.014 & 0.179 $\pm$ 0.027 \\
 \bottomrule
 \end{tabular}
+}
 \end{table}
 
 
@@ -196,6 +199,7 @@ Table~\ref{tab:retrieval} summarizes 420 automatically labeled scenarios; Table~
 \caption{P minus baselines: clustered bootstrap 95\% CIs and Holm-adjusted paired cluster sign-flip $p$-values; 5{,}000 draws and 199 images. SIRR lower is better.}
 \label{tab:retrsig}
 \small
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{llcc}
 \toprule
 \textbf{Comparison} & \textbf{Metric} & \textbf{Diff (95\% CI)} & \textbf{$p_{\text{Holm}}$} \\
@@ -214,6 +218,7 @@ P vs.\ B3 & Recall@5 & $+0.037$ [$+0.020$, $+0.055$] & 0.0024 \\
 P vs.\ B3 & SIRR@5 & $-0.058$ [$-0.076$, $-0.040$] & 0.0024 \\
 \bottomrule
 \end{tabular}
+}
 \end{table}
 
 \begin{table}[t]
@@ -221,6 +226,7 @@ P vs.\ B3 & SIRR@5 & $-0.058$ [$-0.076$, $-0.040$] & 0.0024 \\
 \caption{Controlled-protocol retrieval: 420 metadata-derived scenarios, 199 images, topic-exact candidates, authority weight 0, ONNX FP32 MiniLM. Bold: best non-oracle. SIRR is metadata-defined incompatibility, not agronomic safety.}
 \label{tab:retrieval}
 \small
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{lcccc}
 \toprule
 \textbf{Method} & \textbf{P@5} & \textbf{R@5} & \textbf{nDCG@5} & \textbf{SIRR@5}$\downarrow$ \\
@@ -234,6 +240,7 @@ P: Adaptive & \textbf{0.640} & \textbf{0.386} & \textbf{0.667} & 0.124 \\
 Oracle & 0.688 & 0.433 & 0.723 & 0.080 \\
 \bottomrule
 \end{tabular}
+}
 \end{table}
 
 Table~\ref{tab:strat} stratifies the same scenarios. On correct-stage scenarios ($n=330$), adaptive reranking reaches nDCG@5 0.689 versus B1 0.504. On adjacent errors ($n=84$), it also improves nDCG over B1, but for the six nonadjacent errors its SIRR@5 rises to 0.567 versus 0.100 under hard filtering. The latter stratum is too small for inference but exposes the remaining failure mode of confident stage errors.
@@ -266,6 +273,7 @@ Under a single fixed group split, a ResNet-18 achieves about 0.80 accuracy again
 Adaptive reranking outperforms query expansion, fixed-soft and ungated retrieval on metadata-defined nDCG, recall and precision while lowering SIRR, but this is not universal safety: hard filtering retains the lowest SIRR, particularly in the few nonadjacent errors. Because automated relevance labels share stage-compatibility metadata with the reranker, independent expert review remains necessary to establish substantive agronomic effectiveness.
 
 \section{Limitations and Future Work}
+\label{sec:limitations}
 The 2,900 RiceSEG-derived macro-stage labels depend on canopy cover, panicle fraction and senescence thresholds, not independent expert BBCH annotation; 1,134 images are flagged for review. Hash-aware parent grouping prevents detected aHash near-duplicate pairs crossing splits at the configured threshold but does not establish new-field, season or device independence. The fixed-split three-seed protocol measures training variability conditioned on one partition, and post-hoc selective prediction operating points require validation-based threshold selection. Future work is expert BBCH review, independent relevance judgments, acquisition-grouped external testing, calibrated threshold selection and systematic ablations of adaptive stage weight versus a validation-tuned fixed weight. Chemical or regulatory advice remains outside unattended deployment.
 
 \section{Ethical Considerations}

@@ -17,6 +17,7 @@ Output: CROPSTATE_RESULTS/retrieval/retrieval_significance_clustered.json
 
 from __future__ import annotations
 
+import argparse
 import json
 from collections import defaultdict
 from pathlib import Path
@@ -65,7 +66,15 @@ def image_id(scenario_id: str) -> str:
 
 
 def main() -> None:
-    data = json.loads(IN_PATH.read_text())
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--input", type=Path, default=IN_PATH)
+    parser.add_argument("--output", type=Path, default=OUT_PATH)
+    parser.add_argument("--n-bootstrap", type=int, default=N_BOOT)
+    parser.add_argument("--seed", type=int, default=SEED)
+    args = parser.parse_args()
+    if args.n_bootstrap < 100:
+        parser.error("n-bootstrap must be >=100")
+    data = json.loads(args.input.read_text())
     rows = data["rows"]
 
     by_scenario: dict[str, dict[str, dict]] = defaultdict(dict)
@@ -79,7 +88,7 @@ def main() -> None:
         clusters[image_id(scenario)].append(scenario)
     cluster_keys = list(clusters)
 
-    rng = np.random.default_rng(SEED)
+    rng = np.random.default_rng(args.seed)
 
     def paired_bootstrap(proposed: str, baseline: str, metric: str) -> dict:
         diffs = {
@@ -87,9 +96,9 @@ def main() -> None:
             for s in scenarios
         }
         observed = float(np.mean([diffs[s] for s in scenarios]))
-        boot = np.empty(N_BOOT)
+        boot = np.empty(args.n_bootstrap)
         n_clusters = len(cluster_keys)
-        for b in range(N_BOOT):
+        for b in range(args.n_bootstrap):
             picks = rng.integers(0, n_clusters, n_clusters)
             vals = [diffs[s] for idx in picks for s in clusters[cluster_keys[idx]]]
             boot[b] = np.mean(vals)
@@ -133,16 +142,17 @@ def main() -> None:
     out = {
         "n_scenarios": len(scenarios),
         "n_images": len(cluster_keys),
-        "n_bootstrap": N_BOOT,
-        "seed": SEED,
+        "n_bootstrap": args.n_bootstrap,
+        "seed": args.seed,
         "proposed": PROPOSED,
         "clustering": "scenarios resampled by source image id",
         "multiple_comparison_correction": "holm",
         "paired_bootstrap": comparisons,
         "error_stratified": stratified,
     }
-    OUT_PATH.write_text(json.dumps(out, indent=2))
-    print(f"wrote {OUT_PATH}")
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(json.dumps(out, indent=2))
+    print(f"wrote {args.output}")
 
 
 if __name__ == "__main__":

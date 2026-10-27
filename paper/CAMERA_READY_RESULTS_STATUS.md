@@ -9,12 +9,15 @@ RIVF/IEEE conference template before submission.
 
 The first IEEEtran draft (`cropstate_camera_ready_ieee.tex`) compiled with
 XeLaTeX but produced **8 pages** (GitHub Actions run 40485805734).
-A condensed working draft (`cropstate_camera_ready_ieee_compact.tex`)
-moves five auxiliary tables and the trade-off figure out of the main text,
-retaining the central retrieval comparison and significance table. Its exact
-page count must be verified by CI before use; no reported historical metric
-was changed. Even a six-page compile requires visual inspection and compliance
-with the official conference template.
+The condensed draft (`cropstate_camera_ready_ieee_compact.tex`) remained
+8 pages; a more compact, reviewer-aware IEEE draft
+(`paper/cropstate_camera_ready_ieee_short.tex`) **compiled successfully at
+6 pages** (GitHub Actions run 40486682537). It retains the central vision,
+retrieval, significance and error-stratified findings while shortening
+redundant related-work/discussion text. Later title-alignment changes with
+the acceptance letter must be recompiled and checked again. This is only a
+formatting milestone: historical results have NOT been independently rerun,
+and final visual/IEEE compliance inspection remains mandatory.
 
 ## Important: distinguish three levels of evidence
 

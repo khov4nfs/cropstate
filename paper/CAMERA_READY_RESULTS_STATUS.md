@@ -1,5 +1,8 @@
 # CropState-Vision — Camera-ready experimental verification, updated 2026-10-29
 
+> **SUPERSEDED NUMERIC TABLE (2026-10-29):** The older controlled retrieval figures below (nDCG 0.667 Adaptive and image-level CIs) came from Vietnamese lexical queries against an English IRRI corpus and resampled 199 image crops rather than their 63 original parent photographs. Do **not** use those figures in the final paper. The authoritative corrected method, metrics, validation-only ablations, source hashes and six-page PDF QA are documented in [CAMERA_READY_PROTOCOL_CORRECTION_20261029.md](CAMERA_READY_PROTOCOL_CORRECTION_20261029.md). Final PDF sha256: `dfc018474647242e675c864c8bb5c53cee0ef557c655fd6e2facb1e0daa1b3cd` (6 A4 pages, PDF 1.6). This archival section remains only to show scientific provenance.
+
+
 **Status: controlled retrieval reproduced; validation-only metadata ablations complete; A4/PDF 1.6 camera-ready compiled successfully at six pages.** Canonical source: `paper/cropstate_camera_ready_ieee_short.tex`; compiled PDF: `paper/cropstate_camera_ready_ieee_short.pdf`. The study deliberately limits its claims to weak labels and metadata-based retrieval, without claiming independent expert validation. Legacy tables in `paper/cropstate_paper.tex` describe a different protocol and must not be combined with the controlled results.
 
 ## Verification and provenance

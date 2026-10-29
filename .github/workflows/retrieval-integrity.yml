@@ -12,6 +12,7 @@ on:
       - "scripts/analyze_retrieval_significance_clustered.py"
       - "scripts/evaluate_retrieval.py"
       - "tests/test_retrieval_reproduction.py"
+      - "tests/test_retrieval_protocol_corrections.py"
       - "scripts/experiments/run_retrieval_ablations.py"
       - "scripts/prepare_retrieval_expert_review.py"
       - "tests/test_independent_validation.py"
@@ -45,5 +46,7 @@ jobs:
         run: PYTHONPATH=src:. python -m unittest discover -s tests -p 'test_independent_validation.py' -v
       - name: Integration proof — prepare blind images, enforce no unjudged metrics and score fixture labels
         run: PATH="$PWD/.venv/bin:$PATH" PYTHONPATH=src:. python -m unittest discover -s tests -p 'test_integration_validation_pipeline.py' -v
+      - name: Verify English BM25 lexical signal and parent-group inference (synthetic fixtures)
+        run: PYTHONPATH=src:. python -m unittest discover -s tests -p 'test_retrieval_protocol_corrections.py' -v
       - name: Verify 420-scenario provenance preflight (synthetic fixtures only)
         run: PYTHONPATH=src python -m unittest discover -s tests -p 'test_retrieval_reproduction.py' -v

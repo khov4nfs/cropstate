@@ -7,6 +7,7 @@
 \setmainfont{TeX Gyre Termes}
 \setsansfont{TeX Gyre Heros}
 \usepackage{graphicx}
+\usepackage{url}
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{array}
@@ -30,7 +31,7 @@ Classification and Confidence-Aware Stage-Gated Retrieval}
 \maketitle
 
 \begin{abstract}
-Crop development informs rice management decisions. CropState-Vision classifies field images into six BBCH-derived macro-stages and uses the full probability distribution to gate evidence retrieval. On 2{,}900 RiceSEG-derived images, fixed-split, three-seed ResNet-18 cross-entropy accuracy is 0.800 against morphology-derived weak labels, not expert-validated BBCH stages. We rerun 420 automatically labeled retrieval scenarios (199 test images) using validation-temperature-calibrated belief, entropy/margin confidence, topic-exact candidate pools, and no source-authority bonus. Adaptive reranking achieves nDCG@5 0.667 (query expansion: 0.510) and SIRR@5 0.124 (query expansion: 0.285). Hard filtering attains the lowest SIRR@5 (0.002). A separate validation-only ablation selects fixed $\beta=0.35$ and gives test nDCG@5 0.682 and SIRR@5 0.100, exceeding the untuned adaptive method on these metadata-derived metrics. Image-clustered bootstrap CIs and paired sign-flip tests quantify the differences. The FP32 ONNX export of the same multilingual MiniLM model reproduces all legacy-protocol aggregate metrics exactly before the protocol correction. Relevance and incompatibility judgments derive from the same metadata used by stage gating; these findings validate the ranking mechanism, not expert-judged agronomic effectiveness.
+Crop development informs rice management decisions. CropState-Vision classifies field images into six BBCH-derived macro-stages and uses the full probability distribution to gate evidence retrieval. On 2{,}900 RiceSEG-derived images, fixed-split, three-seed ResNet-18 cross-entropy accuracy is 0.800 against morphology-derived weak labels, not expert-validated BBCH stages. We rerun 420 metadata-labeled retrieval scenarios (199 crops from 63 parent images) using validation-temperature-calibrated belief, English lexical queries over an English corpus, topic-exact candidate pools, and no source-authority bonus. Adaptive reranking achieves nDCG@5 0.545 (query expansion: 0.343) and metadata-SIRR@5 0.127 (query expansion: 0.301). Hard filtering attains the lowest SIRR@5 (0.011) but returns fewer than five documents in 10\% of scenarios. A separate validation-only ablation selects fixed $\beta=0.35$ and gives test nDCG@5 0.612 and SIRR@5 0.101, while a top-1-belief variant reaches 0.617/0.098; both surpass the original adaptive method. Original-parent-photo-clustered bootstrap CIs and paired sign-flip tests (63 parent groups) quantify the differences. The FP32 ONNX export of the same multilingual MiniLM model reproduces all legacy-protocol aggregate metrics exactly before the protocol correction. Relevance and incompatibility judgments derive from the same metadata used by stage gating; these findings validate the ranking mechanism, not expert-judged agronomic effectiveness.
 
 \end{abstract}
 
@@ -51,7 +52,7 @@ This paper asks two questions. First, how reliably can six rice macro-stages be 
 \begin{enumerate}
     \item a near-duplicate-audited benchmark: an average-hash (aHash) near-duplicate sweep over 2{,}900 images detects no cross-split pairs at Hamming thresholds up to 10 under an aHash-grouped split; this property is partly enforced by construction and does not establish field-level independence;
     \item a fixed-split, multi-seed evaluation measuring training variability conditional on one partition: ordinal recall is identical across three runs on the same 24 reproductive images, without proving a general stability gain; selective prediction characterizes the error--coverage trade-off;
-    \item a belief-based adaptive retriever evaluated in 420 metadata-derived scenarios, raising nDCG@5 from 0.510 to 0.667 and lowering SIRR@5 from 0.285 to 0.124 under the controlled candidate and authority protocol;
+    \item a belief-based adaptive retriever evaluated in 420 metadata-derived scenarios, raising nDCG@5 from 0.343 to 0.545 and lowering SIRR@5 from 0.301 to 0.127 with English-language BM25 queries and controlled candidate pools;
     \item a validation-only ablation comparing adaptive routing with a tuned fixed-soft baseline, clarifying which ranking gains hold under the controlled metadata-based evaluation.
 \end{enumerate}
 
@@ -62,7 +63,7 @@ The BBCH scale describes observable phenological transitions using hierarchical 
 
 \subsection{Research Questions and Hypotheses}
 
-RQ1 tests whether pretrained classification surpasses a majority baseline; RQ2 evaluates whether confidence-aware soft gating improves the ranking-versus-incompatibility trade-off relative to hard filtering; RQ3 examines ordinal errors and rare-class limitations.
+RQ1 evaluates vision accuracy, ordinal errors and rare-class behavior against morphology-derived labels relative to a majority baseline; RQ2 examines stage-aware retrieval trade-offs among adaptive, fixed-weight and hard-gated methods.
 
 
 % Condensed for 6-page IEEE draft: tab:rq retained in full manuscript / supplement.
@@ -97,7 +98,7 @@ Ripening & 80--89 & Ripening \\
 
 \subsection{Confidence-Aware Stage-Gated Retrieval}
 
-Each knowledge chunk $x$ carries a stage-compatibility vector $C(x,\phi_i)\in[0,1]$, where one denotes metadata-defined applicability, an intermediate value adjacent or multi-stage applicability, and zero incompatibility under the metadata scheme. For a fixed care topic, BM25 and dense retrieval produce candidate lists whose RRF score is min--max normalized to $\overline{S}_{\mathrm{base}}(x)$. The expected stage compatibility is
+Each knowledge chunk $x$ carries a machine-defined stage-compatibility vector $C(x,\phi_i)\in[0,1]$, where one denotes metadata-defined applicability, an intermediate value adjacent or multi-stage applicability, and zero incompatibility under the metadata scheme. For a fixed care topic, BM25 and dense retrieval produce candidate lists whose RRF score is min--max normalized to $\overline{S}_{\mathrm{base}}(x)$. The expected stage compatibility is
 \begin{equation}
 S_{\mathrm{stage}}(x,B)=\sum_{i=1}^{6}B(\phi_i)\,C(x,\phi_i).
 \end{equation}
@@ -111,9 +112,9 @@ Unlike hard filtering, this never excludes a document solely because it is incom
 
 \subsection{Dataset and Leakage Audit}
 
-The evaluation uses a 2{,}900-image benchmark derived from RiceSEG, split by group (by parent image, so overlapping crops of one photograph stay on the same side) into 2{,}400 training, 237 validation, and 263 test images (seed 42). The split is held \emph{fixed} across all model-seed reruns, so the multi-seed analysis measures training variability conditional on this fixed partition; it does not estimate variance across dataset splits. Class counts are imbalanced across all splits (test: establishment 54, tillering 88, stem/booting 64, reproductive 24, ripening 23, grain filling 10), most severely for grain filling and the reproductive stage.
+The evaluation uses 2{,}900 image crops derived from the 3{,}078 annotated RiceSEG samples \cite{zhou2025riceseg}; the relabeling pipeline matches RGB files to segmentation statistics and excludes crops below 0.02 canopy cover, before splitting by group (by parent image, so overlapping crops of one photograph stay on the same side) into 2{,}400 training, 237 validation, and 263 test images (seed 42). The split is held \emph{fixed} across all model-seed reruns, so the multi-seed analysis measures training variability conditional on this fixed partition; it does not estimate variance across dataset splits. Class counts are imbalanced across all splits (test: establishment 54, tillering 88, stem/booting 64, reproductive 24, ripening 23, grain filling 10), most severely for grain filling and the reproductive stage.
 
-RiceSEG ships per-pixel segmentation masks but no growth-stage labels; we derive the six macro-stages from mask morphology (canopy cover, panicle fraction, senescence fraction) using BBCH-motivated thresholds. Concretely, images with an emerged panicle (BBCH~$\ge$~50) are assigned to reproductive, grain filling, or ripening by their senescence fraction, and pre-panicle images (BBCH~00--49) are assigned to establishment, tillering, or stem/booting by canopy cover. Because the pre-panicle split rests on canopy cover---a weak proxy for the tiller-count and stem-elongation criteria BBCH actually uses---39\% of images (1{,}134/2{,}900) are flagged as uncertain by the heuristic, especially in under-represented classes (e.g.\ reproductive 222/288, grain filling 84/110). These labels have not been independently double-annotated; we state this weak-supervision limitation explicitly (Section~\ref{sec:limitations}).
+RiceSEG ships per-pixel segmentation masks but no growth-stage labels; we derive six BBCH-inspired \emph{pseudo-stages} from mask morphology: panicle fraction $\geq0.02$ separates post-panicle images; senescence cutoffs 0.05/0.20 assign reproductive/grain-filling/ripening; below that panicle threshold, canopy-cover cutoffs 0.31/0.51 assign establishment/tillering/stem-booting. These thresholds reflect the dataset's segmentation statistics rather than observed phenology. Concretely, images with an emerged panicle (BBCH~$\ge$~50) are assigned to reproductive, grain filling, or ripening by their senescence fraction, and pre-panicle images (BBCH~00--49) are assigned to establishment, tillering, or stem/booting by canopy cover. Because the pre-panicle split rests on canopy cover---a weak proxy for the tiller-count and stem-elongation criteria BBCH actually uses---39\% of images (1{,}134/2{,}900) are flagged as uncertain by the heuristic, especially in under-represented classes (e.g.\ reproductive 222/288, grain filling 84/110). These labels have not been independently double-annotated; we state this weak-supervision limitation explicitly (Section~\ref{sec:limitations}).
 
 To reduce the concern that scores are inflated by near-duplicate memorization, we audit the splits with a 64-bit average-hash (aHash) near-duplicate detector: images are converted to grayscale, resized to $8\times8$ pixels, thresholded at the mean grayscale intensity, and paired by Hamming distance. Connected components, together with common parent-image IDs, are kept in the same split \emph{before} the audit. Sweeping the Hamming threshold (aHash threshold sweep) and manually inspecting matches at thresholds 10 and 12, we find that at the reporting threshold (Hamming $\le 10$) the corpus contains 661 near-duplicate edges and 122 multi-image clusters, and \emph{no} such cluster straddles splits, as expected from the hash-aware split construction; cross-split matches appear only at looser thresholds ($\ge 12$) that already begin to link visually distinct images. We therefore report the splits as free of \emph{detected cross-split near-duplicates} rather than leak-free: this audit only addresses near-duplicate memorization and does not rule out field-, session-, season-, or background-level leakage. It is complementary to, not a replacement for, field- or season-grouped splitting, which cannot be assessed here because the evaluated RiceSEG subset lacks field/session identifiers (Section~\ref{sec:limitations}).
 
@@ -123,24 +124,24 @@ To reduce the concern that scores are inflated by near-duplicate memorization, w
 
 \subsection{Knowledge Base and Retrieval Labels}
 
-The retrieval evaluation runs over the non-restricted subset of an English-language corpus of machine-curated chunks built from the publicly available IRRI Rice Knowledge Bank, each tagged with a care topic and a stage-compatibility vector; the corpus is used for research under the source's terms, and derived chunk tags are saved in the external research artifacts (Section~\ref{sec:availability}). For each (test image, care topic) pair we form a scenario using the image's six-class belief; chunks whose stage-compatibility with the morphology-derived reference stage is high are labeled relevant and stage-incompatible chunks are labeled inappropriate. Requiring at least three relevant and three incompatible chunks per (topic, stage) yields 420 scenarios from 199 of the 263 test images. The other 64 have no eligible topic under these corpus-based thresholds; they were not excluded for model errors. Crucially, these relevance labels are \emph{auto-derived from the same stage-compatibility metadata that the proposed re-ranker consumes}, so the evaluation is a \emph{mechanism validation}---it measures consistency with the designed metadata---and cannot, on its own, establish agronomic relevance or recommendation effectiveness. We therefore report retrieval scores solely as automated metadata-consistency results, not as measures of independent agronomic relevance, applicability, or effectiveness.
+The retrieval evaluation uses a research-only English corpus of machine-curated chunks derived from the IRRI Rice Knowledge Bank \cite{irriRiceKnowledgeBank},  each tagged with a care topic and a stage-compatibility vector; the corpus is used for research under the source's terms, and derived chunk tags are saved in the external research artifacts (Section~\ref{sec:availability}). For each (test image, care topic) pair we form a scenario using the image's six-class belief; chunks whose stage-compatibility with the morphology-derived reference stage is high are labeled relevant and stage-incompatible chunks are labeled inappropriate. Requiring at least three relevant and three incompatible chunks per (topic, stage) yields 420 scenarios from 199 of the 263 test images. The other 64 have no eligible topic under these corpus-based thresholds; they were not excluded for model errors. Crucially, these relevance labels are \emph{auto-derived from the same stage-compatibility metadata that the proposed re-ranker consumes}, so the evaluation is a \emph{mechanism validation}---it measures consistency with the designed metadata---and cannot, on its own, establish agronomic relevance or recommendation effectiveness. We therefore report retrieval scores solely as automated metadata-consistency results, not as measures of independent agronomic relevance, applicability, or effectiveness.
 
 \subsection{Vision Models and Loss Functions}
 
-The backbone is fixed to a pretrained, fine-tuned ResNet-18; we vary the training objective, since the interest is stage structure and reliability rather than architecture search. Against a majority-class reference we compare standard cross-entropy, an ordinal-aware loss that adds a squared penalty on the expected stage index, $\mathcal{L}=\mathrm{CE}+\lambda(\mathbb{E}[\phi]-\phi^*)^2$, and a focal loss that down-weights easy examples. All configurations share the fixed group split, class-balanced sampling, and evaluation protocol, and each is trained with three seeds (42, 7, 123) so reported figures are mean $\pm$ standard deviation. Temperature scaling is fitted after training on validation logits only.
+The backbone is a fine-tuned ImageNet-pretrained ResNet-18 (224-pixel input, batch 32, up to 30 epochs, AdamW; head/backbone learning rates $3\times10^{-4}/3\times10^{-5}$, backbone frozen for the first three epochs). The objective varies, not the backbone. Against a majority-class reference we compare standard cross-entropy, an ordinal-aware loss with $\lambda=0.5$ applied to stage indices $0,\ldots,5$, $\mathcal{L}=\mathrm{CE}+0.5(\mathbb{E}[y]-y^*)^2$, and a focal variant ($\gamma=2$) calculated from class-weighted cross-entropy. The latter differs from the standard unweighted focal formulation. All configurations use one fixed group split and class-weighted losses (the checked-in training configuration disables balanced sampling). Each is evaluated across three seeds (42, 7, 123), so reported figures are mean $\pm$ standard deviation; checkpoint-level sampler flags are not reconstructed here. Temperature scaling is fitted after training on validation logits only.
 
 \subsection{Retrieval Baselines}
 
-The five comparison methods are summarized below.
+We compare five operational methods and one reference-stage oracle; the latter uses the morphology-derived reference class, not expert ground truth or ideal relevance ordering.
 
 
 The comparison uses B0 (ungated hybrid BM25+dense RRF), B1 (top-1 stage query expansion), B2 (top-1 hard filtering), B3 (fixed-soft stage reranking), and P (confidence-adaptive belief-based reranking).
 
-All methods share the same 173 IRRI chunks, topic-exact candidates (no unjudged general-care fallback), BM25/dense RRF depth 50, and $k=5$. For this controlled evaluation, source-authority weight is explicitly set to zero (regardless of library defaults); B3 uses an \emph{untuned} fixed $\beta=0.20$. The six-way belief is temperature-scaled on validation ($T=0.875$), and adaptive confidence combines normalized entropy concentration (0.6) and top-two margin (0.4). We use the same multilingual MiniLM-L12-v2 model in its FP32 ONNX export (128-token cap, masked mean pooling and L2 normalization); the legacy-protocol replay exactly reproduces all historical aggregate scores.
+All methods share the same 173 English IRRI chunks, \emph{English} lexical queries (BM25), multilingual dense MiniLM embeddings, topic-exact candidates (no unjudged general-care fallback), RRF with $k_0=60$ and depth 50, and $k=5$. Legacy Vietnamese lexical queries gave degenerate zero-overlap BM25 scores and are excluded from the corrected benchmark. For this controlled evaluation, source-authority weight is explicitly set to zero (regardless of library defaults); B3 uses an \emph{untuned} fixed $\beta=0.20$. The six-way belief is temperature-scaled on validation ($T=0.875$); adaptive confidence combines normalized entropy concentration (0.6) and top-two margin (0.4), with $\beta_{\min}=0.05$ and $\beta_{\max}=0.35$. Machine-defined relevant chunks require compatibility $\geq0.5$. We use the same multilingual MiniLM-L12-v2 model in its FP32 ONNX export (128-token cap, masked mean pooling and L2 normalization); the legacy-protocol replay exactly reproduces all historical aggregate scores.
 
 \subsection{Evaluation Metrics and Statistics}
 
-Vision metrics are accuracy, macro-F1, per-class recall, ECE, Brier score, and Mean Absolute Stage Distance, $\mathrm{MASD}=\frac{1}{N}\sum_j|\mathrm{index}(\hat{\phi}_j)-\mathrm{index}(\phi_j^*)|$, which separates an adjacent mistake from one several stages off. Deployment behavior is summarized by selective prediction: after temperature scaling on the validation split, we rank test images by the confidence proxy and, for each coverage level, report the selective risk ($1-$ selective accuracy). We summarize the curve by the normalized area under the risk--coverage curve (AURC), the trapezoidal integral of selective risk over coverage in $[0,1]$, where lower is better. Retrieval metrics are Precision@$k$, Recall@$k$, nDCG@$k$, and SIRR@$k$ ($k=5$). Because methods are evaluated on the same items, comparisons are paired: for vision we report bootstrap 95\% confidence intervals \cite{efron1993bootstrap} and McNemar's test \cite{mcnemar1947note} for paired binary outcomes. The reproductive-recall behavior across the three seeds reuses the same 24 test images, so those repeated predictions are \emph{not} independent observations; we therefore report them descriptively (per-seed recall and its spread) and do not pool them for a single significance test. For retrieval, because one test image spawns several topic scenarios, we use a paired bootstrap that \emph{resamples whole images} (clusters of scenarios) and apply a Holm correction across the family of method comparisons, so the reported confidence intervals respect the non-independence of same-image scenarios.
+Vision metrics are accuracy, macro-F1, per-class recall, ECE, Brier score, and Mean Absolute Stage Distance, $\mathrm{MASD}=\frac{1}{N}\sum_j|\mathrm{index}(\hat{\phi}_j)-\mathrm{index}(\phi_j^*)|$, which separates an adjacent mistake from one several stages off. Deployment behavior is summarized by selective prediction: after temperature scaling on the validation split, we rank test images by the confidence proxy and, for each coverage level, report the selective risk ($1-$ selective accuracy). We summarize the curve by the normalized area under the risk--coverage curve (AURC), the trapezoidal integral of selective risk over coverage in $[0,1]$, where lower is better. Retrieval metrics are Precision@$k$, Recall@$k$, nDCG@$k$, and SIRR@$k$ ($k=5$). Because methods are evaluated on the same items, comparisons are paired: for vision we report bootstrap 95\% confidence intervals \cite{efron1993bootstrap} and McNemar's test \cite{mcnemar1947note} for paired binary outcomes. The reproductive-recall behavior across the three seeds reuses the same 24 test images, so those repeated predictions are \emph{not} independent observations; we therefore report them descriptively (per-seed recall and its spread) and do not pool them for a single significance test. For retrieval, repeated topics and overlapping crops are clustered by the \emph{original parent photograph}: the 420 scenarios contain 199 crops but only 63 parent groups. Paired bootstrap intervals and parent-group sign-flip tests use 5{,}000 resamples; Holm adjustment controls the 12 listed method--metric tests \cite{holm1979sequential}.
 
 % Metadata-derived retrieval tables rerun on 2026-10-27; domain labels remain weak.
 \section{Results}
@@ -193,30 +194,30 @@ This analysis uses the primary ResNet-18 cross-entropy checkpoint (seed 42), wit
 
 \subsection{Stage-Gated Retrieval (RQ2)}
 
-Table~\ref{tab:retrieval} summarizes 420 automatically labeled scenarios; Table~\ref{tab:retrsig} reports paired differences with 95\% image-cluster bootstrap CIs and Holm-adjusted cluster sign-flip $p$-values (5{,}000 draws; 199 images). Against B1 query expansion, adaptive reranking increases nDCG@5 from 0.510 to 0.667 while reducing SIRR@5 from 0.285 to 0.124. Hard filtering retains the lowest SIRR@5 (0.002). Changes to the candidate universe, calibrated beliefs and source authority make these numbers \emph{incomparable} with legacy-protocol scores, although the encoder reproduces historical metrics when legacy settings are restored. Metadata-derived SIRR is not an independent measure of agronomic safety.
+Table~\ref{tab:retrieval} reports 420 metadata-derived scenarios. Table~\ref{tab:retrsig} uses bootstrap CIs and Holm-adjusted sign-flip tests on 63 original parent groups (5{,}000 resamples), not the 199 overlapping crops. Adaptive improves nDCG@5 over B1 from 0.343 to 0.545 and lowers metadata-SIRR@5 from 0.301 to 0.127. Hard filtering lowers SIRR to 0.011 but returns fewer than five documents in 42/420 scenarios (10\%), including two empty outputs; SIRR divides incompatible hits by five even for incomplete rankings. New English lexical queries make these scores \emph{non-comparable} with prior Vietnamese-query results.
 
 \begin{table}[t]
 \centering
-\caption{P minus baselines: clustered bootstrap 95\% CIs and Holm-adjusted paired cluster sign-flip $p$-values; 5{,}000 draws and 199 images. SIRR lower is better.}
+\caption{P minus baselines: 95\% bootstrap CIs and Holm-adjusted sign-flip tests, clustered by 63 original parent photographs (5{,}000 draws). Metadata labels only.}
 \label{tab:retrsig}
 \small
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{llcc}
 \toprule
-\textbf{Comparison} & \textbf{Metric} & \textbf{Diff (95\% CI)} & \textbf{$p_{\text{Holm}}$} \\
+\textbf{Comparison} & \textbf{Metric} & \textbf{Diff (95\% CI)} & \textbf{$p_{\mathrm{Holm}}$} \\
 \midrule
-P vs.\ B0 & nDCG@5 & $+0.167$ [$+0.125$, $+0.209$] & 0.0024 \\
-P vs.\ B0 & Recall@5 & $+0.130$ [$+0.093$, $+0.168$] & 0.0024 \\
-P vs.\ B0 & SIRR@5 & $-0.182$ [$-0.221$, $-0.144$] & 0.0024 \\
+P vs.\ B0 & nDCG@5 & $+0.262$ [$+0.219$, $+0.308$] & 0.0024 \\
+P vs.\ B0 & Recall@5 & $+0.146$ [$+0.109$, $+0.183$] & 0.0024 \\
+P vs.\ B0 & SIRR@5 & $-0.091$ [$-0.118$, $-0.064$] & 0.0024 \\
 \addlinespace
-P vs.\ B1 & nDCG@5 & $+0.156$ [$+0.107$, $+0.207$] & 0.0024 \\
-P vs.\ B1 & Recall@5 & $+0.070$ [$+0.024$, $+0.119$] & 0.0062 \\
-P vs.\ B1 & Precision@5 & $+0.106$ [$+0.063$, $+0.151$] & 0.0024 \\
-P vs.\ B1 & SIRR@5 & $-0.161$ [$-0.200$, $-0.123$] & 0.0024 \\
+P vs.\ B1 & nDCG@5 & $+0.202$ [$+0.165$, $+0.243$] & 0.0024 \\
+P vs.\ B1 & Recall@5 & $+0.139$ [$+0.111$, $+0.168$] & 0.0024 \\
+P vs.\ B1 & Precision@5 & $+0.112$ [$+0.081$, $+0.144$] & 0.0024 \\
+P vs.\ B1 & SIRR@5 & $-0.174$ [$-0.195$, $-0.152$] & 0.0024 \\
 \addlinespace
-P vs.\ B3 & nDCG@5 & $+0.050$ [$+0.029$, $+0.072$] & 0.0024 \\
-P vs.\ B3 & Recall@5 & $+0.037$ [$+0.020$, $+0.055$] & 0.0024 \\
-P vs.\ B3 & SIRR@5 & $-0.058$ [$-0.076$, $-0.040$] & 0.0024 \\
+P vs.\ B3 & nDCG@5 & $+0.081$ [$+0.057$, $+0.105$] & 0.0024 \\
+P vs.\ B3 & Recall@5 & $+0.063$ [$+0.045$, $+0.082$] & 0.0024 \\
+P vs.\ B3 & SIRR@5 & $-0.048$ [$-0.061$, $-0.036$] & 0.0024 \\
 \bottomrule
 \end{tabular}
 }
@@ -224,7 +225,7 @@ P vs.\ B3 & SIRR@5 & $-0.058$ [$-0.076$, $-0.040$] & 0.0024 \\
 
 \begin{table}[t]
 \centering
-\caption{Controlled-protocol retrieval: 420 metadata-derived scenarios, 199 images, topic-exact candidates, authority weight 0, ONNX FP32 MiniLM. Bold: best among these listed baseline methods; B3 beta=0.20 is untuned. SIRR is metadata-defined, not agronomic safety.}
+\caption{English-query controlled retrieval: 420 metadata-derived scenarios, 199 crops from 63 parent images. B3 $\beta=0.20$ is untuned. SIRR is internal metadata mismatch, not safety.}
 \label{tab:retrieval}
 \small
 \resizebox{\columnwidth}{!}{%
@@ -232,34 +233,34 @@ P vs.\ B3 & SIRR@5 & $-0.058$ [$-0.076$, $-0.040$] & 0.0024 \\
 \toprule
 \textbf{Method} & \textbf{P@5} & \textbf{R@5} & \textbf{nDCG@5} & \textbf{SIRR@5}$\downarrow$ \\
 \midrule
-B0: Ungated hybrid & 0.521 & 0.256 & 0.500 & 0.306 \\
-B1: Query expansion & 0.534 & 0.316 & 0.510 & 0.285 \\
-B2: Hard filter & 0.575 & 0.360 & 0.611 & \textbf{0.002} \\
-B3: Fixed soft ($\beta{=}0.20$) & 0.601 & 0.349 & 0.617 & 0.182 \\
-P: Adaptive & \textbf{0.640} & \textbf{0.386} & \textbf{0.667} & 0.124 \\
+B0: Ungated hybrid & 0.277 & 0.235 & 0.283 & 0.218 \\
+B1: Query expansion & 0.373 & 0.241 & 0.343 & 0.301 \\
+B2: Hard filter & 0.350 & 0.340 & 0.374 & \textbf{0.011} \\
+B3: Fixed soft ($\beta{=}0.20$) & 0.409 & 0.317 & 0.465 & 0.175 \\
+P: Adaptive & \textbf{0.485} & \textbf{0.380} & \textbf{0.545} & 0.127 \\
 \midrule
-Oracle & 0.688 & 0.433 & 0.723 & 0.080 \\
+Reference-stage oracle & 0.614 & 0.453 & 0.661 & 0.070 \\
 \bottomrule
 \end{tabular}
 }
 \end{table}
 
-Table~\ref{tab:strat} stratifies the same scenarios. On correct-stage scenarios ($n=330$), adaptive reranking reaches nDCG@5 0.689 versus B1 0.504. On adjacent errors ($n=84$), it also improves nDCG over B1, but for the six nonadjacent errors its SIRR@5 rises to 0.567 versus 0.100 under hard filtering. The latter stratum is too small for inference but exposes the remaining failure mode of confident stage errors.
+Table~\ref{tab:strat} stratifies the same scenarios. Adaptive reaches nDCG@5 0.576 versus B1 0.332 on correct pseudo-stage predictions ($n=330$). On adjacent errors ($n=84$), Adaptive reaches 0.435 versus B1 0.385, but B3 reaches 0.444. On six nonadjacent errors, Adaptive SIRR rises to 0.433 versus 0.100 for hard filtering. This rare subset is descriptive, not evidence of population-level performance.
 
 \begin{table}[t]
 \centering
-\caption{nDCG@5 / metadata-defined SIRR@5 by condition (correct $n=330$, adjacent $n=84$, nonadjacent $n=6$). Bold: best non-oracle nDCG and minimum SIRR per stratum; nonadjacent $n=6$ is underpowered.}
+\caption{nDCG@5 / metadata SIRR@5 by weak-stage prediction error (correct $n=330$, adjacent $n=84$, nonadjacent $n=6$); the last stratum is underpowered.}
 \label{tab:strat}
 \small
 \begin{tabular}{lccc}
 \toprule
 \textbf{Method} & \textbf{Correct} & \textbf{Adjacent} & \textbf{Nonadj.} \\
 \midrule
-B0 & 0.484 / 0.318 & 0.595 / 0.221 & 0.066 / 0.833 \\
-B1 & 0.504 / 0.301 & 0.574 / 0.188 & 0.000 / 0.767 \\
-B2 & 0.673 / \textbf{0.000} & 0.397 / \textbf{0.005} & \textbf{0.213} / \textbf{0.100} \\
-B3 & 0.627 / 0.178 & 0.607 / 0.171 & 0.189 / 0.600 \\
-P & \textbf{0.689} / 0.107 & \textbf{0.611} / 0.160 & 0.194 / 0.567 \\
+B0 & 0.280 / 0.222 & 0.304 / 0.188 & 0.188 / 0.367 \\
+B1 & 0.332 / 0.307 & 0.385 / 0.271 & 0.342 / 0.367 \\
+B2 & 0.423 / \textbf{0.000} & 0.200 / \textbf{0.048} & 0.146 / \textbf{0.100} \\
+B3 & 0.472 / 0.171 & \textbf{0.444} / 0.174 & 0.349 / 0.400 \\
+P & \textbf{0.576} / 0.111 & 0.435 / 0.167 & \textbf{0.392} / 0.433 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -271,11 +272,11 @@ P & \textbf{0.689} / 0.107 & \textbf{0.611} / 0.160 & 0.194 / 0.567 \\
 \section{Discussion}
 Under a single fixed group split, a ResNet-18 achieves about 0.80 accuracy against \emph{weakly derived} BBCH macro-stage labels. Ordinal loss changes overall accuracy negligibly but gives identical reproductive recall (0.917) across three seeds on the same 24 test images; this is descriptive within-split stability, not statistically established improvement or cross-field generalization. Grain filling (10 test images) remains underpowered.
 
-Under the original \emph{untuned} fixed weight ($\beta=0.20$), adaptive reranking improves metadata-defined ranking and incompatibility relative to B0, B1 and B3. However, a separate validation-only study (359 scenarios, 180 images) selects fixed $\beta=0.35$ by maximizing validation nDCG@5 minus metadata-defined SIRR@5. Frozen on the 420 test scenarios, this fixed weight reaches nDCG@5 0.682 and SIRR@5 0.100 versus adaptive 0.667/0.124 (paired image-cluster $\Delta$ nDCG $+0.0156$, 95\% CI $[+0.0074,+0.0248]$). A top-1-confidence variant reaches 0.675/0.110 and a top-1-belief variant 0.678/0.099; both challenge the necessity of the combined-confidence belief signal. These comparisons use shared metadata-derived labels, not independent measures of agronomic utility or safety. Hard filtering still has the lowest metadata-SIRR.
+Under the untuned fixed weight ($\beta=0.20$), Adaptive improves metadata-based scores over B0, B1 and B3. A separate validation-only study (359 scenarios from 180 crops and 59 parent groups) selects fixed $\beta=0.35$ using validation nDCG@5 minus metadata-SIRR@5. On held-out test scenarios, tuned fixed reaches nDCG@5 0.612 / SIRR@5 0.101 versus Adaptive 0.545/0.127 (parent-clustered $\Delta$ nDCG $+0.0662$, 95\% CI $[+0.0500,+0.0835]$, exploratory Holm $p=0.0012$). A top-1-belief variant reaches 0.617/0.098 and top-1-confidence variant 0.569/0.118, challenging the need for the combined-confidence belief signal. All improvements are defined against reused compatibility metadata, not field applicability or agronomic safety.
 
 \section{Limitations}
 \label{sec:limitations}
-The 2{,}900 macro-stage reference labels are morphology-derived rather than expert-confirmed BBCH observations; vision accuracy and selective risk measure agreement with these weak labels. Only one ResNet-18 backbone and one fixed data split were assessed, with small reproductive ($n=24$) and grain-filling ($n=10$) test subsets. Parent/aHash grouping controls detected near-duplicate leakage but cannot establish independence across fields, seasons, cultivars or devices. Retrieval relevance and SIRR are defined using the same stage metadata consumed by reranking, so they measure internal compatibility rather than independently judged agronomic usefulness or safety. The validation-tuned fixed-soft baseline also outperforms the original adaptive scheme on these metadata metrics. Results do not establish external generalization, accurate field BBCH staging or autonomous decision-support safety.
+The 2{,}900 macro-stage reference labels are morphology-derived rather than expert-confirmed BBCH observations; vision accuracy and selective risk measure agreement with these weak labels. Only one ResNet-18 backbone and one fixed data split were assessed, with small reproductive ($n=24$) and grain-filling ($n=10$) test subsets. Parent/aHash grouping controls detected near-duplicate leakage but cannot establish independence across fields, seasons, cultivars or devices. Retrieval relevance and SIRR are defined using the same stage metadata consumed by reranking, so they measure internal compatibility rather than independently judged agronomic usefulness or safety. Both validation-tuned fixed-soft and top-1-belief variants outperform the original adaptive scheme on these metadata metrics; the hard filter does not guarantee five outputs. Results do not establish external generalization, accurate field BBCH staging or autonomous decision-support safety.
 
 \section{Ethical Considerations}
 
@@ -283,12 +284,12 @@ Farm images can reveal location, farm layout, or other information the grower ma
 
 \section{Conclusion}
 
-CropState-Vision combines weakly supervised six-stage rice classification with confidence-adaptive retrieval. A fixed-split three-seed evaluation yields approximately 0.800 vision accuracy against inferred stages; BBCH labels are not expert-verified. With corrected retrieval settings and the same MiniLM model executed as ONNX FP32, adaptive gating reaches nDCG@5=0.667 (B1 0.510) and SIRR@5=0.124 (B1 0.285) over 420 scenarios. Hard filtering retains lower incompatibility and large stage errors remain risky. The validation-tuned fixed-soft ablation improves metadata-defined scores over adaptive gating; hence adaptivity is not established as superior. Machine-derived relevance and a single dataset split limit the findings to this controlled research setting; independently verified BBCH accuracy, field-level transfer and real-world agronomic safety are not established.
+CropState-Vision evaluates six morphology-derived rice pseudo-stages and uncertainty-aware evidence routing. Three-seed, fixed-split ResNet-18 accuracy is approximately 0.800 against weak labels. With matching English lexical queries and English IRRI chunks, Adaptive reaches nDCG@5 0.545 versus B1 0.343, with metadata-SIRR@5 0.127 versus 0.301 over 420 scenarios. A validation-tuned fixed-soft baseline reaches nDCG 0.612, and a top-1-belief variant 0.617; therefore combined-confidence adaptivity is not established as best. Hard filtering has lower mismatch but misses Top-5 completion in 10\% of scenarios. Parent-group clustering, weak labels and metadata-derived relevance bound these results to internal research evaluation rather than independent BBCH accuracy or agronomic effectiveness.
 
 \section{Data and Code Availability}
 \label{sec:availability}
 
-The image benchmark derives from RiceSEG segmentation masks under its original access terms; no source images are redistributed. Our BBCH macro-stage labels are heuristic weak labels. The 173-chunk IRRI knowledge corpus is machine-curated for research; its provenance, input/output checksums and fixed scenario IDs are recorded in external reproducibility artifacts alongside the evaluation code. Original image and text assets remain subject to their source terms and are not redistributed with this paper.
+The image benchmark derives from RiceSEG segmentation masks under its original access terms \cite{zhou2025riceseg}; no source images are redistributed. Our BBCH macro-stage labels are heuristic weak labels. The 173-chunk IRRI knowledge corpus is machine-curated for research \cite{irriRiceKnowledgeBank}; code is available at \url{https://github.com/khov4nfs/cropstate}. The permitted provenance, hashes and scenario IDs accompany the code; source text and images remain under original access conditions. Original image and text assets remain subject to their source terms and are not redistributed with this paper.
 
 \bibliographystyle{IEEEtran}
 \bibliography{references}

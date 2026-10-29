@@ -139,6 +139,10 @@ def main() -> None:
                         help="Locally pinned model snapshot when --embedding-backend=onnx")
     parser.add_argument("--expected-scenarios", type=int, default=420)
     parser.add_argument("--expected-images", type=int, default=199)
+    parser.add_argument("--query-language", choices=("en", "vi"), default="en",
+                        help="English corpus: en for corrected study; vi only to replay legacy.")
+    parser.add_argument("--image-manifest", type=Path,
+                        help="Manifest of image_id -> parent_image_id; REQUIRED for scientific inference.")
     parser.add_argument("--fixed-beta", type=float, default=0.20)
     parser.add_argument("--bootstrap", type=int, default=5000)
     parser.add_argument("--allow-legacy-beliefs", action="store_true",
@@ -148,6 +152,8 @@ def main() -> None:
     args = parser.parse_args()
 
     paths = [args.corpus, args.scenarios or args.logits_index]
+    if not args.check_only:
+        paths.append(args.image_manifest)
     if args.logits_index:
         paths.append(args.calibration)
     missing = [str(p) for p in paths if p is None or not p.is_file()]
@@ -208,9 +214,11 @@ def main() -> None:
          * (["--onnx-model-dir", str(args.onnx_model_dir.resolve())]
             if args.onnx_model_dir else []),
          "--mode", "research", "--source-weight", "0",
-         "--fixed-beta", str(args.fixed_beta), "--output", str(evaluation.resolve())])
+         "--fixed-beta", str(args.fixed_beta), "--query-language", args.query_language,
+         "--output", str(evaluation.resolve())])
     run([sys.executable, "scripts/analyze_retrieval_significance_clustered.py",
          "--input", str(evaluation.resolve()),
+         "--image-manifest", str(args.image_manifest.resolve()),
          "--output", str(significance.resolve()), "--n-bootstrap", str(args.bootstrap)])
     write_camera_ready_table(evaluation, significance,
                              args.output_dir / "CAMERA_READY_RETRIEVAL_TABLE.md")
@@ -222,7 +230,9 @@ def main() -> None:
         "embedding_backend_metadata": json.loads(evaluation.read_text())[
             "evaluation_config"]["embedding_backend"],
         "n_bootstrap": args.bootstrap,
-        "p_value_test": "paired image-cluster sign-flip with +1 correction",
+        "p_value_test": "paired ORIGINAL-PARENT-group sign-flip with +1 correction",
+        "query_language": args.query_language,
+        "image_manifest_sha256": digest(args.image_manifest),
         "calibration_sha256": digest(args.calibration) if args.calibration else None,
         "scenario_count": checked["scenario_count"],
         "contributing_images": checked["contributing_images"],
@@ -230,7 +240,7 @@ def main() -> None:
         "embedding_backend": args.embedding_backend,
         "embedding_model": args.embedding_model,
         "allow_legacy_beliefs": args.allow_legacy_beliefs,
-        "notes": "Automatic stage compatibility only; requires independent expert evaluation.",
+        "notes": "Metadata-only mechanism study; independent agronomic validity is an explicit limitation.",
     }
     (args.output_dir / "PROVENANCE.json").write_text(
         json.dumps(provenance, indent=2) + "\n", encoding="utf-8"

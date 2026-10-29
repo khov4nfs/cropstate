@@ -86,6 +86,8 @@ def main() -> None:
     parser.add_argument("--embedding-backend", choices=("sentence-transformers", "onnx"),
                         default="sentence-transformers", help="ONNX FP32 is an explicit alternative execution backend.")
     parser.add_argument("--onnx-model-dir", default=None, help="Pinned model snapshot path for ONNX backend.")
+    parser.add_argument("--query-language", choices=("en", "vi"), default="en",
+                        help="Use English lexical queries for the English IRRI corpus; legacy VI is explicit.")
     parser.add_argument("--depth", type=int, default=50)
     parser.add_argument("--k", type=int, default=5)
     parser.add_argument("--source-weight", type=float, default=0.0,
@@ -131,8 +133,8 @@ def main() -> None:
         if not np.isfinite(confidence) or not 0.0 <= confidence <= 1.0:
             raise ValueError(f"Invalid routing confidence for scenario {scenario_id}: {confidence!r}")
         # B0/B2/B3/P share a stage-free query; only B1 (query expansion) gets a stage-bearing query.
-        base_query = str(scenario.get("query") or build_topic_query(topic))
-        expanded_query = build_topic_query(topic, predicted_stage)
+        base_query = str(scenario.get("query") or build_topic_query(topic, language=args.query_language))
+        expanded_query = build_topic_query(topic, predicted_stage, language=args.query_language)
         relevance = parse_relevance(scenario)
         relevant = {document_id for document_id, grade in relevance.items() if grade > 0}
         incompatible = parse_ids(scenario.get("incompatible_chunk_ids", scenario.get("nonmatching_chunk_ids")))
@@ -176,6 +178,8 @@ def main() -> None:
                 "recall_at_k": recall,
                 "ndcg_at_k": ndcg_at_k(ranking, relevance, args.k),
                 "sirr_at_k": sirr_at_k(ranking, incompatible, args.k),
+                "returned_at_k": min(len(ranking), args.k),
+                "top_k_complete": int(len(ranking) >= args.k),
                 "top_ids": ranking[: args.k],
             })
 
@@ -184,7 +188,7 @@ def main() -> None:
         subset = [row for row in rows if row["method"] == method]
         summary[method] = {
             metric: float(np.mean([row[metric] for row in subset]))
-            for metric in ["precision_at_k", "recall_at_k", "ndcg_at_k", "sirr_at_k"]
+            for metric in ["precision_at_k", "recall_at_k", "ndcg_at_k", "sirr_at_k", "returned_at_k", "top_k_complete"]
         }
     payload = {
         "k": args.k,
@@ -197,6 +201,8 @@ def main() -> None:
             "embedding_backend": encoder_metadata,
             "depth": args.depth,
             "mode": args.mode,
+            "query_language": args.query_language,
+            "english_corpus": True,
         },
         "summary": summary, "rows": rows,
     }

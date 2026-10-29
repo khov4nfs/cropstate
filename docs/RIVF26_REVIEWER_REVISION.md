@@ -27,7 +27,7 @@
 |---|---|---|---|
 | CP-01 | R1–R4: BBCH reference labels | `scripts/experiments/relabel_riceseg_bbch.py` derives weak labels from mask morphology. | **LIMITATION:** all classification metrics reflect morphological weak labels; expert-verified BBCH accuracy is not claimed. No additional expert experiment is presented as pending. |
 | CP-02 | R1–R4: retrieval circularity | `scripts/experiments/build_belief_scenarios.py` derives relevance from stage metadata also used by reranking. | **LIMITATION:** scores reflect metadata-consistency only; neither independent recommendation usefulness nor safety is claimed. |
-| CP-03 | R2/R4: adaptive versus fixed | scripts/experiments/run_retrieval_ablations.py and ignored ablation_results.json: beta 0.35 selected from 359 validation scenarios; test fixed nDCG 0.6824 / SIRR 0.1000 vs adaptive 0.6668 / 0.1243. | **CORRECTED IN CAMERA-READY SOURCE:** B3 beta 0.20 is explicitly untuned, and tuned fixed is stronger on these metadata metrics. |
+| CP-03 | R2/R4: adaptive versus fixed | Corrected English-query test protocol: β=0.35 selected on 359 validation scenarios; held-out fixed nDCG 0.612 / SIRR 0.101 versus adaptive 0.545 / 0.127. Top-1 belief nDCG 0.617. | **VERIFIED AND REVISED:** β=0.20 was untuned; tuned fixed and top-1 belief are superior to combined adaptive on metadata-defined scores. Original Vietnamese-query metrics are superseded. |
 | CP-04 | R1–R3: abstention selection | Validation-only confidence cutoff 0.524541 retains 189/263 test images, coverage 0.7186, weak-label risk 0.1217. | **CORRECTED IN CAMERA-READY SOURCE:** the 0.54-coverage point is explicitly illustrative; the validation-selected threshold 0.5245 and its held-out outcome are reported separately. |
 | CP-05 | R2: 64 omitted test images | Scenario builder requires >=3 relevant and >=3 incompatible chunks per (stage, topic); only 199/263 test images have at least one qualifying topic, yielding 420 scenarios. | **CORRECTED IN CAMERA-READY SOURCE:** explicitly explain 64 exclusions as corpus/scenario eligibility, not an image-model failure. |
 | CP-06 | R1–R4: pHash and field leakage | src/cropstate/splits.py and scripts/experiments/leakage_audit.py implement grayscale 8x8 **aHash** Hamming clustering before splitting. | **CORRECTED:** short paper now says aHash, acknowledges zero cross-split matches is partly by construction and does not prove field/season independence. |
@@ -58,3 +58,15 @@ PYTHONPATH=src:. .venv/bin/python -m unittest discover -s tests -p 'test_integra
 ~~~
 
 The checked-in GitHub Actions workflow runs the same integration test with a fresh Python 3.11 environment after installing lightweight test dependencies. Its result is an engineering test, separate from RIVF reviewers' scientific findings.
+
+## Independent code–paper integrity checks after the EDAS reviews (2026-10-29)
+
+These items were discovered by implementation audit and are **not** being attributed as remarks by the EDAS reviewers:
+
+- **P0 lexical/corpus mismatch — CORRECTED:** baseline evaluator previously produced Vietnamese BM25 queries against 173 English chunks. The corrected baseline and validation ablations explicitly use English queries; all test statistics and rankings were regenerated.
+- **P0 dependence — CORRECTED:** 420 scenarios are nested in 199 crops but only 63 original parent photographs. CI and sign-flip permutation resample original parent groups; overlap is not mistaken for independent observations.
+- **P0 incomplete Top-K — DISCLOSED:** hard filtering returns fewer than five chunks in 42/420 scenarios, including two empty results. SIRR@5 uses denominator five, while full Top-5 rate is independently reported as 90%.
+- **P1 method provenance — CLARIFIED:** the checked-in vision config disables balanced sampling but enables class-weighted losses, and the implemented weighted focal variant differs from standard unweighted focal modulation. The paper limits its interpretation to the code and historical training protocol.
+- **P1 bibliography — CORRECTED:** original RiceSEG and IRRI sources are now cited directly; BBCH heuristics are described numerically. No additional human labels or external validation are claimed.
+
+The corrected metrics, SHA-256 provenance and reproduction commands are in `paper/CAMERA_READY_PROTOCOL_CORRECTION_20261029.md`. The earlier 27 October numeric table is archival only.

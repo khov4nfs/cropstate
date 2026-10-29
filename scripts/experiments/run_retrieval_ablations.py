@@ -121,7 +121,7 @@ def average(metrics: list[dict[str, float]]) -> dict[str, float]:
 def base_candidates(retriever: HybridRetriever, scenarios: list[dict]) -> dict[str, dict[str, float]]:
     cached = {}
     for topic in sorted({str(s["topic"]) for s in scenarios}):
-        bm25, dense = retriever.retrieve(build_topic_query(topic), depth=50, topic=topic,
+        bm25, dense = retriever.retrieve(build_topic_query(topic, language="en"), depth=50, topic=topic,
                                          include_general_fallback=False)
         cached[topic] = minmax(reciprocal_rank_fusion([bm25, dense]))
     return cached
@@ -168,9 +168,9 @@ def selective_evaluation(logits: np.ndarray, labels: np.ndarray,
 
 
 def paired_cluster_comparisons(test_rows: list[dict], candidates: dict, chunks: dict,
-                               selected_beta: float, n_resamples: int = 5000,
-                               seed: int = 42) -> dict:
-    """Paired image-cluster bootstrap CIs and sign-flip p values (exploratory)."""
+                               selected_beta: float, parent_by_image: dict[str, str],
+                               n_resamples: int = 5000, seed: int = 42) -> dict:
+    """Paired ORIGINAL-PARENT-group bootstrap CIs and sign-flip p values."""
     from collections import defaultdict
     variants = ("adaptive_combined", "fixed_validation_selected",
                 "adaptive_top1_belief", "adaptive_top1_confidence")
@@ -178,11 +178,11 @@ def paired_cluster_comparisons(test_rows: list[dict], candidates: dict, chunks: 
         measure(variant_ranking(candidates[r["topic"]], chunks, r, v, selected_beta), r)
         for r in test_rows
     ] for v in variants}
-    ids = sorted(image_ids(test_rows))
+    ids = sorted({parent_by_image[name] for name in image_ids(test_rows)})
     cluster_idx = {name: i for i, name in enumerate(ids)}
     counts = np.zeros(len(ids), dtype=int)
     for row in test_rows:
-        counts[cluster_idx[row["scenario_id"].rsplit("__", 1)[0]]] += 1
+        counts[cluster_idx[parent_by_image[row["scenario_id"].rsplit("__", 1)[0]]]] += 1
     rng = np.random.default_rng(seed)
     comparisons = {}
     tests = []
@@ -191,7 +191,7 @@ def paired_cluster_comparisons(test_rows: list[dict], candidates: dict, chunks: 
         for metric in ("ndcg_at_k", "sirr_at_k"):
             sums = np.zeros(len(ids), dtype=float)
             for i, row in enumerate(test_rows):
-                name = row["scenario_id"].rsplit("__", 1)[0]
+                name = parent_by_image[row["scenario_id"].rsplit("__", 1)[0]]
                 sums[cluster_idx[name]] += (scores[variant][i][metric] -
                                              scores["adaptive_combined"][i][metric])
             observed = float(sums.sum() / counts.sum())
@@ -210,7 +210,9 @@ def paired_cluster_comparisons(test_rows: list[dict], candidates: dict, chunks: 
     for i, entry in enumerate(ordered):
         previous = max(previous, min(1.0, (len(tests) - i) * entry["p_raw_two_sided"]))
         entry["p_holm"] = previous
-    return {"n_images": len(ids), "n_scenarios": len(test_rows), "n_resamples": n_resamples,
+    return {"n_parent_groups": len(ids), "n_images": len(image_ids(test_rows)),
+            "clustering": "original parent_image_id",
+            "n_scenarios": len(test_rows), "n_resamples": n_resamples,
             "seed": seed, "multiple_testing": "Holm across 6 exploratory tests",
             "comparisons": comparisons}
 
@@ -271,10 +273,10 @@ def main() -> None:
             for metric in METRICS:
                 if abs(baseline[original][metric] - test[variant][metric]) > 1e-9:
                     raise ValueError(f"Reference mismatch for {original} {metric}; don't report ablation")
-    paired = paired_cluster_comparisons(test_rows, test_cache, chunk_map, selected_beta)
+    paired = paired_cluster_comparisons(test_rows, test_cache, chunk_map, selected_beta, manifest)
     threshold = choose_abstention_threshold(logits["validation_logits"], temp)
     out = {
-        "protocol": "metadata-derived ablation; no independent expert relevance",
+        "protocol": "English queries on English corpus; parent-group clustered; metadata-derived ablation, not expert relevance",
         "selection": {"partition": "validation_only", "fixed_beta_grid": list(GRID),
                       "fixed_beta_objective": "maximize nDCG@5 minus metadata-defined SIRR@5",
                       "fixed_beta_selected": selected_beta,

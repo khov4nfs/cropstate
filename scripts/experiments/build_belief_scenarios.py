@@ -54,6 +54,8 @@ def prediction_from_logits(logits, temperature=1.0, confidence_method="combined"
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--split", choices=("test", "validation"), default="test",
+                        help="Choose evaluation partition; tune only on validation, freeze before test.")
     parser.add_argument("--logits-index", default="CROPSTATE_RESULTS/novelty/logits/index.json")
     parser.add_argument("--model", default="resnet18")
     parser.add_argument("--corpus", default="CROPSTATE_KNOWLEDGE_BASE/chunks/rice_knowledge_irri_en_nonrestricted.jsonl")
@@ -69,9 +71,10 @@ def main():
 
     index = json.loads(Path(args.logits_index).read_text())
     data = np.load(index[args.model]["path"], allow_pickle=True)
-    logits = data["test_logits"].astype(np.float64)
-    labels = data["test_labels"].astype(int)
-    image_ids = [str(x) for x in data["test_image_ids"]]
+    prefix = args.split
+    logits = data[f"{prefix}_logits"].astype(np.float64)
+    labels = data[f"{prefix}_labels"].astype(int)
+    image_ids = [str(x) for x in data[f"{prefix}_image_ids"]]
     beliefs = softmax_np(logits)
 
     temperature = 1.0
@@ -135,8 +138,8 @@ def main():
         writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()))
         writer.writeheader()
         writer.writerows(rows)
-    print(f"[scenarios] wrote {len(rows)} scenarios over {len({r['topic'] for r in rows})} topics, "
-          f"{len(image_ids)} test images, temperature={temperature:.3f}, "
+    print(f"[scenarios] {args.split} wrote {len(rows)} scenarios over {len({r['topic'] for r in rows})} topics, "
+          f"{len(image_ids)} {args.split} source images, temperature={temperature:.3f}, "
           f"confidence={args.confidence_method}")
 
 

@@ -1,6 +1,6 @@
-# CropState-Vision — Camera-ready experimental verification, 2026-10-27
+# CropState-Vision — Camera-ready experimental verification, updated 2026-10-29
 
-**Status: controlled-protocol retrieval reproduced; validation-only metadata ablations complete; independent expert packet prepared but NOT judged.** The canonical camera-ready draft is paper/cropstate_camera_ready_ieee_short.tex. Legacy tables remain in paper/cropstate_paper.tex for comparison; do not combine them.
+**Status: controlled retrieval reproduced; validation-only metadata ablations complete; A4/PDF 1.6 camera-ready compiled successfully at six pages.** Canonical source: `paper/cropstate_camera_ready_ieee_short.tex`; compiled PDF: `paper/cropstate_camera_ready_ieee_short.pdf`. The study deliberately limits its claims to weak labels and metadata-based retrieval, without claiming independent expert validation. Legacy tables in `paper/cropstate_paper.tex` describe a different protocol and must not be combined with the controlled results.
 
 ## Verification and provenance
 
@@ -70,13 +70,13 @@ The local run directory contains calibrated scenarios, per-scenario per-method r
 - The corrected candidate universe and source authority differ from the historical protocol, so magnitudes cannot be interpreted as a purely algorithmic gain.
 - The original six-method table uses untuned fixed beta=0.20; subsequent validation-only tuning and abstention selection are reported separately below and still use weak/metadata labels.
 - The same source-image clusters recur across topics; confidence intervals and paired tests account for image-level dependence but not field/season generalization.
-- The IEEE draft has passed the six-page GitHub build on the earlier commit. Recompile after new ablation-language changes, inspect layout and obtain final scholarly review before upload.
+- The revised XeLaTeX manuscript was independently built in a Dockerized TeX Live 2025 environment on 2026-10-29: six A4 pages, PDF 1.6, embedded fonts, no overfull lines, unresolved references, missing glyphs or LaTeX errors. The official RIVF'26 author-facing limit is six A4 pages.
 
 Vision results in the original manuscript remain historical, not rerun this turn. Do not label them newly reverified.
 
-## Follow-on phase: validation-only ablations and independent relevance packet (2026-10-27)
+## Validation-only ablations: evidence and inference limits (2026-10-27)
 
-**Not an expert-judged result.** New `docs/INDEPENDENT_VALIDATION_PROTOCOL.md` provides executable commands, independent assessor blinding, rubric, eligibility gates and interpretation rules.
+**Not an expert-judged result.** The automated ablations are included only as metadata-defined experiments. `docs/INDEPENDENT_VALIDATION_PROTOCOL.md` preserves their reproducibility protocol; it does not supply independent agronomy truth.
 
 - 359 automatically labeled **validation** scenarios from 180 distinct validation images; held-out **test** remains the same 420 scenarios from 199 images. Inputs confirmed disjoint at original parent-image group and image ID levels; no test metric is used for hyperparameter selection.
 - Fixed beta grid 0.05–0.35, step 0.05: validation-only selection by max(nDCG@5 − metadata-SIRR@5) chooses **beta=0.35**. Equal metric weights are a predeclared diagnostic, NOT a domain-expert risk utility.
@@ -84,7 +84,7 @@ Vision results in the original manuscript remain historical, not rerun this turn
 - Calibrated top-1 confidence: test nDCG/SIRR **0.6753/0.1100**; one-hot top-1 belief **0.6781/0.0986**; entropy-only **0.6683/0.1195**; margin-only **0.6650/0.1252**; raw belief **0.6630/0.1295**. These are exploratory ablations, not independent expert labels, and do not establish safety.
 - Selective prediction threshold **0.5245412541** chosen **only on 237 validation logits** to target 70% coverage. On 263 held-out test images: coverage **0.7186** (189 retained), selective risk against **weak labels** **0.1217**, versus full risk **0.2053**. Full curve saved externally.
 - New run cross-check asserts exact agreement to within 1e−9 for original adaptive, hard-filter and fixed beta=0.20 controlled benchmark.
-- Blinded independent relevance packet: **60 distinct real-image cases**, **564 pooled image-query-chunk tasks**, separate blank sheets for two human reviewers, with admin-only method / weak-stage metadata. Blank-score dry run: **0 expert judgments, 0 consensus cases**. All 60 source image assets are excluded from Git by `.gitignore`. BBCH's separate 120-image packet also remains **0 expert labels**.
+- No independently verified BBCH stage references or agronomist-scored recommendation relevance are available in this study; this is a stated limit, not a pending camera-ready deliverable.
 
 New ignored artifact hashes:
 - Validation scenarios CSV SHA-256: `cca6ade6af69060c4220091057709e1110cef7b76011fec01dcd52811bdc9858`
@@ -92,4 +92,12 @@ New ignored artifact hashes:
 - Admin case manifest SHA-256: `883baede9775b7eee4307b4549165769ab775ed030dce891d57a07b6ab052dea`
 - Admin pooled-item manifest SHA-256: `ad7746315357d4a79f61ece83cd3d4322a120f0646e2446391afe25c63390053`
 
-**Camera-ready editorial decision:** Keep the six-method controlled table for comparability with the original benchmark, label B3 explicitly as `fixed beta=0.20 (untuned)`, and report validation-tuned fixed-beta ablation separately. Do not claim adaptive universally wins over fixed gating. Full independent relevance rankings and BBCH accuracies remain blocked on genuine experts.
+**Camera-ready editorial decision:** Retain the six-method controlled table, label B3 as `fixed beta=0.20 (untuned)`, and report validation-selected fixed-beta experiments separately. Do not claim adaptive superiority over tuned fixed gating, expert-verified BBCH accuracy, agronomic utility or safety. Unavailable external validations are research limitations, not incomplete camera-ready tasks.
+
+## Final build QA — 2026-10-29
+
+- Source: `paper/cropstate_camera_ready_ieee_short.tex` using `IEEEtran[conference,a4paper]`, XeLaTeX, and xdvipdfmx PDF 1.6.
+- Output: `paper/cropstate_camera_ready_ieee_short.pdf`, **6 pages**, A4 595.28 × 841.89 pt, **138,865 bytes**, SHA-256 `a35dc185b473d4454fb5d976f25ddf505f60b0c5f960e431dad5818ae6bf8d9d`.
+- `pdfinfo`: A4, PDF version 1.6, six pages. `pdffonts`: all fonts embedded. Build log: no overfull hbox, undefined references, missing glyphs or undefined control sequences. The minor underfull hbox warnings do not clip content.
+- Visual inspection of rendered pages 1, 3, 5 and 6: titles, tables, limitations, conclusion and references are inside page bounds.
+- This verifies the build and layout, **not** independent scientific claims, IEEE PDF eXpress acceptance, EDAS submission, copyright transfer or conference registration.

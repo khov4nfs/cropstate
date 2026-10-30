@@ -1,0 +1,297 @@
+% Camera-ready source: VERIFIED ONNX FP32 controlled-protocol retrieval; weak-label limitations apply.
+% !TeX program = xelatex
+\documentclass[conference,a4paper]{IEEEtran}
+\special{pdf:minorversion 6}
+
+\usepackage{fontspec}
+\setmainfont{TeX Gyre Termes}
+\setsansfont{TeX Gyre Heros}
+\usepackage{graphicx}
+\usepackage{url}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\usepackage{pgf-pie}
+\pgfplotsset{compat=1.17}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric}
+
+\begin{document}
+
+\title{CropState-Vision: A Reliability-Oriented Evaluation of Six-Stage Rice Growth
+Classification and Confidence-Aware Stage-Gated Retrieval}
+
+\author{\IEEEauthorblockN{Lê Bảo Nhi \qquad Phan Nguyễn Quốc Minh \qquad Lê Khánh Nhi}
+\IEEEauthorblockA{FPT University, Da Nang, Viet Nam\\
+\{lebaonhi0805, minhpnq1807, nhilekhanh29\}@gmail.com}}
+
+\maketitle
+
+\begin{abstract}
+Crop development informs rice management decisions. CropState-Vision classifies field images into six BBCH-derived macro-stages and uses the full probability distribution to gate evidence retrieval. On 2{,}900 RiceSEG-derived images, fixed-split, three-seed ResNet-18 cross-entropy accuracy is 0.800 against morphology-derived weak labels, not expert-validated BBCH stages. We rerun 420 metadata-labeled retrieval scenarios (199 crops from 63 parent images) using validation-temperature-calibrated belief, English lexical queries over an English corpus, topic-exact candidate pools, and no source-authority bonus. Adaptive reranking achieves nDCG@5 0.545 (query expansion: 0.343) and metadata-SIRR@5 0.127 (query expansion: 0.301). Hard filtering attains the lowest SIRR@5 (0.011) but returns fewer than five documents in 10\% of scenarios. A separate validation-only ablation selects fixed $\beta=0.35$ and gives test nDCG@5 0.612 and SIRR@5 0.101, while a top-1-belief variant reaches 0.617/0.098; both surpass the original adaptive method. Original-parent-photo-clustered bootstrap CIs and paired sign-flip tests (63 parent groups) quantify the differences. The FP32 ONNX export of the same multilingual MiniLM model reproduces all legacy-protocol aggregate metrics exactly before the protocol correction. Relevance and incompatibility judgments derive from the same metadata used by stage gating; these findings validate the ranking mechanism, not expert-judged agronomic effectiveness.
+
+\end{abstract}
+
+\begin{IEEEkeywords}
+rice growth stage, BBCH, image classification, ordinal loss, calibration,
+selective prediction, stage-aware retrieval, data leakage
+\end{IEEEkeywords}
+
+\section{Introduction}
+
+Agricultural management follows the crop, not the calendar. Water management, nutrient application, disease surveillance, and harvest preparation all differ across establishment, tillering, reproductive development, grain filling, and ripening, so a digital advisor needs to know which stage a field is in before it can retrieve stage-tagged guidance, whose practical suitability still requires human judgment.
+
+Field images are a natural input, because phenological development shows up visually through leaf development, tiller formation, stem elongation, panicle emergence, grain formation, and ripening. In practice, stage recognition is hardest exactly where it matters: near stage boundaries, and under everyday variation in viewpoint, lighting, plant density, background, and camera distance. A model can also be confidently wrong, which is a particular risk for a class with few training examples. Converting an uncertain visual prediction into a single stage label and applying a hard metadata filter can then amplify the error by discarding all evidence associated with the true stage.
+
+CropState-Vision represents crop development as a distribution over stages rather than a single static label. Image classification supplies the visual evidence; the distribution becomes a stage belief that controls how strongly the retriever favors stage-compatible evidence. When the prediction is concentrated and calibrated, stage compatibility receives more weight; when it is diffuse, the system relaxes stage conditioning to preserve recall. After an image is uploaded, the system retrieves evidence for a fixed set of care topics rather than answering free-form questions.
+
+This paper asks two questions. First, how reliably can six rice macro-stages be recognized from field images, once the benchmark is audited for leakage and the classifier is evaluated across seeds rather than on a single lucky run? Second, what ranking--incompatibility trade-offs does confidence-aware soft gating show relative to hard filtering and fixed-weight reranking when vision predictions are uncertain or wrong? The contributions are:
+\begin{enumerate}
+    \item a near-duplicate-audited benchmark: an average-hash (aHash) near-duplicate sweep over 2{,}900 images detects no cross-split pairs at Hamming thresholds up to 10 under an aHash-grouped split; this property is partly enforced by construction and does not establish field-level independence;
+    \item a fixed-split, multi-seed evaluation measuring training variability conditional on one partition: ordinal recall is identical across three runs on the same 24 reproductive images, without proving a general stability gain; selective prediction characterizes the error--coverage trade-off;
+    \item a belief-based adaptive retriever evaluated in 420 metadata-derived scenarios, raising nDCG@5 from 0.343 to 0.545 and lowering SIRR@5 from 0.301 to 0.127 with English-language BM25 queries and controlled candidate pools;
+    \item a validation-only ablation comparing adaptive routing with a tuned fixed-soft baseline, clarifying which ranking gains hold under the controlled metadata-based evaluation.
+\end{enumerate}
+
+\section{Related Work}
+The BBCH scale describes observable phenological transitions using hierarchical stage codes \cite{meier2001bbch,lancashire1991uniform}; our six categories aggregate these codes and do not replace expert staging. Image-based rice growth work has considered seedling classification and reproductive-stage panicle detection \cite{tan2022machine,tan2023ricepanicle,zheng2025android}, whereas our task covers establishment through ripening using whole-field images. We adopt an ImageNet-pretrained ResNet-18 \cite{he2016deep,deng2009imagenet} and evaluate ordinal errors, class imbalance and temperature scaling \cite{gutierrez2016ordinal,lin2017focal,guo2017calibration}. Retrieval combines BM25, dense embeddings and reciprocal rank fusion \cite{robertson2009bm25,karpukhin2020dpr,cormack2009rrf}; our focus is how uncertainty in visual stage beliefs affects stage-conditioned reranking and metadata-defined incompatibility, not a new image architecture or retrieval foundation model.
+
+\section{Task Formulation}
+
+\subsection{Research Questions and Hypotheses}
+
+RQ1 evaluates vision accuracy, ordinal errors and rare-class behavior against morphology-derived labels relative to a majority baseline; RQ2 examines stage-aware retrieval trade-offs among adaptive, fixed-weight and hard-gated methods.
+
+
+% Condensed for 6-page IEEE draft: tab:rq retained in full manuscript / supplement.
+
+
+\subsection{Six Rice Macro-Stages and Stage Belief}
+
+Let $\Phi = \langle \phi_1,\dots,\phi_6 \rangle$ be the ordered stage set in Table~\ref{tab:stages}. For image $I$, a model $f_\theta$ produces logits $o = f_\theta(I)$, and the stage distribution is
+\begin{equation}
+p(\phi_i \mid I) = \mathrm{softmax}(o/T)_i,
+\label{eq:softmax}
+\end{equation}
+where $T > 0$ is a temperature estimated from validation data when calibration is applied. The predicted class is $\hat{\phi} = \arg\max_i p(\phi_i \mid I)$, but CropState-Vision keeps the full distribution $B=p(\cdot\mid I)$ as the stage belief. Belief concentration is summarized by normalized entropy $\Gamma = 1 - H(B)/\log 6$ and the top-two margin $M = B^{(1)} - B^{(2)}$, combined into a confidence proxy $\kappa = \eta_1\Gamma + \eta_2 M$ with $\eta_1+\eta_2=1$. This confidence is a routing signal, not proof that the predicted stage is correct.
+
+\begin{table}[t]
+\centering
+\caption{Rice macro-stages used in the study.}
+\label{tab:stages}
+\begin{tabular}{lcl}
+\toprule
+\textbf{Group} & \textbf{BBCH} & \textbf{Label} \\
+\midrule
+Germination and leaf development & 00--19 & Establishment \\
+Tillering & 20--29 & Tillering \\
+Stem elongation and booting & 30--49 & Stem/booting \\
+Heading and flowering & 50--69 & Reproductive \\
+Grain development & 70--79 & Grain filling \\
+Ripening & 80--89 & Ripening \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Confidence-Aware Stage-Gated Retrieval}
+
+Each knowledge chunk $x$ carries a machine-defined stage-compatibility vector $C(x,\phi_i)\in[0,1]$, where one denotes metadata-defined applicability, an intermediate value adjacent or multi-stage applicability, and zero incompatibility under the metadata scheme. For a fixed care topic, BM25 and dense retrieval produce candidate lists whose RRF score is min--max normalized to $\overline{S}_{\mathrm{base}}(x)$. The expected stage compatibility is
+\begin{equation}
+S_{\mathrm{stage}}(x,B)=\sum_{i=1}^{6}B(\phi_i)\,C(x,\phi_i).
+\end{equation}
+The adaptive stage weight rises with confidence, $\beta=\beta_{\min}+(\beta_{\max}-\beta_{\min})\kappa$, and the final score is
+\begin{equation}
+S(x)=(1-\beta)\,\overline{S}_{\mathrm{base}}(x)+\beta\,S_{\mathrm{stage}}(x,B).
+\end{equation}
+Unlike hard filtering, this never excludes a document solely because it is incompatible with the top-1 stage; hard filtering is retained as a comparison baseline. Metadata-defined stage mismatch is summarized by the Stage-Inappropriate Retrieval Rate, $\mathrm{SIRR}@k=\frac{1}{k}\sum_{x\in\mathrm{TopK}}\mathbb{I}[C(x,\phi^*)=0]$, where $\phi^*$ is the morphology-derived reference stage; this is not a field-safety metric.
+
+\section{Materials and Methods}
+
+\subsection{Dataset and Leakage Audit}
+
+The evaluation uses 2{,}900 image crops derived from the 3{,}078 annotated RiceSEG samples \cite{zhou2025riceseg}; the relabeling pipeline matches RGB files to segmentation statistics and excludes crops below 0.02 canopy cover, before splitting by group (by parent image, so overlapping crops of one photograph stay on the same side) into 2{,}400 training, 237 validation, and 263 test images (seed 42). The split is held \emph{fixed} across all model-seed reruns, so the multi-seed analysis measures training variability conditional on this fixed partition; it does not estimate variance across dataset splits. Class counts are imbalanced across all splits (test: establishment 54, tillering 88, stem/booting 64, reproductive 24, ripening 23, grain filling 10), most severely for grain filling and the reproductive stage.
+
+RiceSEG ships per-pixel segmentation masks but no growth-stage labels; we derive six BBCH-inspired \emph{pseudo-stages} from mask morphology: panicle fraction $\geq0.02$ separates post-panicle images; senescence cutoffs 0.05/0.20 assign reproductive/grain-filling/ripening; below that panicle threshold, canopy-cover cutoffs 0.31/0.51 assign establishment/tillering/stem-booting. These thresholds reflect the dataset's segmentation statistics rather than observed phenology. Concretely, images with an emerged panicle (BBCH~$\ge$~50) are assigned to reproductive, grain filling, or ripening by their senescence fraction, and pre-panicle images (BBCH~00--49) are assigned to establishment, tillering, or stem/booting by canopy cover. Because the pre-panicle split rests on canopy cover---a weak proxy for the tiller-count and stem-elongation criteria BBCH actually uses---39\% of images (1{,}134/2{,}900) are flagged as uncertain by the heuristic, especially in under-represented classes (e.g.\ reproductive 222/288, grain filling 84/110). These labels have not been independently double-annotated; we state this weak-supervision limitation explicitly (Section~\ref{sec:limitations}).
+
+To reduce the concern that scores are inflated by near-duplicate memorization, we audit the splits with a 64-bit average-hash (aHash) near-duplicate detector: images are converted to grayscale, resized to $8\times8$ pixels, thresholded at the mean grayscale intensity, and paired by Hamming distance. Connected components, together with common parent-image IDs, are kept in the same split \emph{before} the audit. Sweeping the Hamming threshold (aHash threshold sweep) and manually inspecting matches at thresholds 10 and 12, we find that at the reporting threshold (Hamming $\le 10$) the corpus contains 661 near-duplicate edges and 122 multi-image clusters, and \emph{no} such cluster straddles splits, as expected from the hash-aware split construction; cross-split matches appear only at looser thresholds ($\ge 12$) that already begin to link visually distinct images. We therefore report the splits as free of \emph{detected cross-split near-duplicates} rather than leak-free: this audit only addresses near-duplicate memorization and does not rule out field-, session-, season-, or background-level leakage. It is complementary to, not a replacement for, field- or season-grouped splitting, which cannot be assessed here because the evaluated RiceSEG subset lacks field/session identifiers (Section~\ref{sec:limitations}).
+
+
+% Condensed for 6-page IEEE draft: tab:leakage retained in full manuscript / supplement.
+
+
+\subsection{Knowledge Base and Retrieval Labels}
+
+The retrieval evaluation uses a research-only English corpus of machine-curated chunks derived from the IRRI Rice Knowledge Bank \cite{irriRiceKnowledgeBank},  each tagged with a care topic and a stage-compatibility vector; the corpus is used for research under the source's terms, and derived chunk tags are saved in the external research artifacts (Section~\ref{sec:availability}). For each (test image, care topic) pair we form a scenario using the image's six-class belief; chunks whose stage-compatibility with the morphology-derived reference stage is high are labeled relevant and stage-incompatible chunks are labeled inappropriate. Requiring at least three relevant and three incompatible chunks per (topic, stage) yields 420 scenarios from 199 of the 263 test images. The other 64 have no eligible topic under these corpus-based thresholds; they were not excluded for model errors. Crucially, these relevance labels are \emph{auto-derived from the same stage-compatibility metadata that the proposed re-ranker consumes}, so the evaluation is a \emph{mechanism validation}---it measures consistency with the designed metadata---and cannot, on its own, establish agronomic relevance or recommendation effectiveness. We therefore report retrieval scores solely as automated metadata-consistency results, not as measures of independent agronomic relevance, applicability, or effectiveness.
+
+\subsection{Vision Models and Loss Functions}
+
+The backbone is a fine-tuned ImageNet-pretrained ResNet-18 (224-pixel input, batch 32, up to 30 epochs, AdamW; head/backbone learning rates $3\times10^{-4}/3\times10^{-5}$, backbone frozen for the first three epochs). The objective varies, not the backbone. Against a majority-class reference we compare standard cross-entropy, an ordinal-aware loss with $\lambda=0.5$ applied to stage indices $0,\ldots,5$, $\mathcal{L}=\mathrm{CE}+0.5(\mathbb{E}[y]-y^*)^2$, and a focal variant ($\gamma=2$) calculated from class-weighted cross-entropy. The latter differs from the standard unweighted focal formulation. All configurations use one fixed group split and class-weighted losses (the checked-in training configuration disables balanced sampling). Each is evaluated across three seeds (42, 7, 123), so reported figures are mean $\pm$ standard deviation; checkpoint-level sampler flags are not reconstructed here. Temperature scaling is fitted after training on validation logits only.
+
+\subsection{Retrieval Baselines}
+
+We compare five operational methods and one reference-stage oracle; the latter uses the morphology-derived reference class, not expert ground truth or ideal relevance ordering.
+
+
+The comparison uses B0 (ungated hybrid BM25+dense RRF), B1 (top-1 stage query expansion), B2 (top-1 hard filtering), B3 (fixed-soft stage reranking), and P (confidence-adaptive belief-based reranking).
+
+All methods share the same 173 English IRRI chunks, \emph{English} lexical queries (BM25), multilingual dense MiniLM embeddings, topic-exact candidates (no unjudged general-care fallback), RRF with $k_0=60$ and depth 50, and $k=5$. Legacy Vietnamese lexical queries gave degenerate zero-overlap BM25 scores and are excluded from the corrected benchmark. For this controlled evaluation, source-authority weight is explicitly set to zero (regardless of library defaults); B3 uses an \emph{untuned} fixed $\beta=0.20$. The six-way belief is temperature-scaled on validation ($T=0.875$); adaptive confidence combines normalized entropy concentration (0.6) and top-two margin (0.4), with $\beta_{\min}=0.05$ and $\beta_{\max}=0.35$. Machine-defined relevant chunks require compatibility $\geq0.5$. We use the same multilingual MiniLM-L12-v2 model in its FP32 ONNX export (128-token cap, masked mean pooling and L2 normalization); the legacy-protocol replay exactly reproduces all historical aggregate scores.
+
+\subsection{Evaluation Metrics and Statistics}
+
+Vision metrics are accuracy, macro-F1, per-class recall, ECE, Brier score, and Mean Absolute Stage Distance, $\mathrm{MASD}=\frac{1}{N}\sum_j|\mathrm{index}(\hat{\phi}_j)-\mathrm{index}(\phi_j^*)|$, which separates an adjacent mistake from one several stages off. Deployment behavior is summarized by selective prediction: after temperature scaling on the validation split, we rank test images by the confidence proxy and, for each coverage level, report the selective risk ($1-$ selective accuracy). We summarize the curve by the normalized area under the risk--coverage curve (AURC), the trapezoidal integral of selective risk over coverage in $[0,1]$, where lower is better. Retrieval metrics are Precision@$k$, Recall@$k$, nDCG@$k$, and SIRR@$k$ ($k=5$). Because methods are evaluated on the same items, comparisons are paired: for vision we report bootstrap 95\% confidence intervals \cite{efron1993bootstrap} and McNemar's test \cite{mcnemar1947note} for paired binary outcomes. The reproductive-recall behavior across the three seeds reuses the same 24 test images, so those repeated predictions are \emph{not} independent observations; we therefore report them descriptively (per-seed recall and its spread) and do not pool them for a single significance test. For retrieval, repeated topics and overlapping crops are clustered by the \emph{original parent photograph}: the 420 scenarios contain 199 crops but only 63 parent groups. Paired bootstrap intervals and parent-group sign-flip tests use 5{,}000 resamples; Holm adjustment controls the 12 listed method--metric tests \cite{holm1979sequential}.
+
+% Metadata-derived retrieval tables rerun on 2026-10-27; domain labels remain weak.
+\section{Results}
+
+\subsection{Stage Classification (RQ1)}
+
+All three losses beat the majority-class reference (accuracy 0.335) by a wide margin (Table~\ref{tab:results}). Among the losses, differences in overall accuracy, macro-F1, and MASD (CE 0.238, ordinal 0.233, focal 0.271) are within seed noise: the ordinal loss holds a razor-thin, non-meaningful lead on mean accuracy (0.801 vs 0.800), macro-F1 (0.796 vs 0.794), and MASD (0.233 vs 0.238), while cross-entropy has the lowest ECE. A single seed can even invert the accuracy ranking---on seed 42 the ordinal model reaches 0.814 versus cross-entropy's 0.795, whereas cross-entropy leads on the highest-accuracy seed---which is why we report three-seed means on a fixed split rather than a single lucky run.
+
+\begin{table}[t]
+\centering
+\caption{Vision on the 2{,}900-image derived-stage benchmark. Three training seeds (42, 7, 123) on one fixed split: mean $\pm$ std. Labels are morphology-derived, not expert verified.}
+\label{tab:results}
+\small
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{lccc}
+\toprule
+\textbf{Model / loss} & \textbf{Acc.} & \textbf{Macro-F1} & \textbf{ECE}$\downarrow$ \\
+\midrule
+Majority & 0.335 & 0.084 & n/a \\
+ResNet-18 CE & 0.800 $\pm$ 0.007 & 0.794 $\pm$ 0.019 & \textbf{0.062 $\pm$ 0.014} \\
+ResNet-18 ordinal & \textbf{0.801 $\pm$ 0.013} & \textbf{0.796 $\pm$ 0.018} & 0.064 $\pm$ 0.002 \\
+ResNet-18 focal & 0.767 $\pm$ 0.016 & 0.757 $\pm$ 0.014 & 0.179 $\pm$ 0.027 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+
+% Condensed for 6-page IEEE draft: tab:perclass retained in full manuscript / supplement.
+
+
+On the 24-image reproductive subset, ordinal recall is identical across three runs (0.917, $\sigma=0.000$), while cross-entropy ranges from 0.833 to 0.958 ($\sigma=0.052$). This is a descriptive fixed-split result, not evidence of a population-level stability benefit from the loss. Per-class recall shows that this stability does not extend to the other rare class: grain filling, with only 10 test images, is the weakest and most variable class under every loss (recall $0.60$--$0.63$, $\sigma$ up to $0.094$), and the ordinal loss does not improve it. The two under-represented classes therefore behave differently, and neither is claimed to be solved. The focal loss is the clear negative case: worst on accuracy, MASD, and especially calibration (ECE 0.179, roughly three times cross-entropy's), and is kept only as an ablation.
+
+Paired tests on the shared 263-image test split (seed-42 checkpoints) find no significant difference in overall accuracy or MASD between losses. On the reproductive subset ($n=24$), the ordinal model raises recall from 0.833 to 0.917 on this seed (difference $+0.083$, bootstrap 95\% CI $[0.000,0.208]$; McNemar $b{=}2$, $c{=}0$, $p{=}0.50$). Across the three training runs on the \emph{same} 24-image reproductive subset, the ordinal objective produced identical recall (0.917 on every seed); because these repeated predictions reuse the same images they are not independent observations, and we therefore report them descriptively as across-seed \emph{stability} rather than pooling them for a single significance test. The sample is too small to establish higher reproductive recall or generalized training stability; the observed across-seed variance on these same 24 images is zero. Because the split is fixed across seeds, the spread in Table~\ref{tab:results} reflects initialization variance alone, resolving the split/seed confound of earlier pilots. One caveat remains: all losses share one cross-entropy-oriented hyperparameter recipe, so the focal result should be read under that recipe.
+
+
+% Condensed for 6-page IEEE draft: tab:paired retained in full manuscript / supplement.
+
+
+\subsection{Selective Prediction}
+
+This analysis uses the primary ResNet-18 cross-entropy checkpoint (seed 42), with the temperature fit on the validation split only and never on test. Temperature scaling (fitted $T=0.875$) leaves the test calibration error essentially unchanged (ECE $0.061\to0.061$; Brier improves marginally, $0.301\to0.298$), so we do not present it as a calibration improvement. Its value is realized through selective prediction: allowing the model to abstain on its least-confident cases (Fig.~\ref{fig:riskcoverage}). At full coverage the weak-label error rate is 0.205. The plotted coverage-0.54/risk-0.099 point is illustrative, not validation-selected. A cutoff of 0.5245 chosen on validation for about 70\% coverage retains 189/263 test images (coverage 0.719) at weak-label risk 0.122; AURC is 0.126. This motivates uncertainty notices, not a claim of field safety.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.95\columnwidth]{figures/selective_prediction.png}
+\caption{Weak-label selective risk versus coverage after temperature scaling (AURC $=0.126$). The coverage-0.54 point is illustrative, not validation-selected.}
+\label{fig:riskcoverage}
+\end{figure}
+
+\subsection{Stage-Gated Retrieval (RQ2)}
+
+Table~\ref{tab:retrieval} reports 420 metadata-derived scenarios. Table~\ref{tab:retrsig} uses bootstrap CIs and Holm-adjusted sign-flip tests on 63 original parent groups (5{,}000 resamples), not the 199 overlapping crops. Adaptive improves nDCG@5 over B1 from 0.343 to 0.545 and lowers metadata-SIRR@5 from 0.301 to 0.127. Hard filtering lowers SIRR to 0.011 but returns fewer than five documents in 42/420 scenarios (10\%), including two empty outputs; SIRR divides incompatible hits by five even for incomplete rankings. New English lexical queries make these scores \emph{non-comparable} with prior Vietnamese-query results.
+
+\begin{table}[t]
+\centering
+\caption{P minus baselines: 95\% bootstrap CIs and Holm-adjusted sign-flip tests, clustered by 63 original parent photographs (5{,}000 draws). Metadata labels only.}
+\label{tab:retrsig}
+\small
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{llcc}
+\toprule
+\textbf{Comparison} & \textbf{Metric} & \textbf{Diff (95\% CI)} & \textbf{$p_{\mathrm{Holm}}$} \\
+\midrule
+P vs.\ B0 & nDCG@5 & $+0.262$ [$+0.219$, $+0.308$] & 0.0024 \\
+P vs.\ B0 & Recall@5 & $+0.146$ [$+0.109$, $+0.183$] & 0.0024 \\
+P vs.\ B0 & SIRR@5 & $-0.091$ [$-0.118$, $-0.064$] & 0.0024 \\
+\addlinespace
+P vs.\ B1 & nDCG@5 & $+0.202$ [$+0.165$, $+0.243$] & 0.0024 \\
+P vs.\ B1 & Recall@5 & $+0.139$ [$+0.111$, $+0.168$] & 0.0024 \\
+P vs.\ B1 & Precision@5 & $+0.112$ [$+0.081$, $+0.144$] & 0.0024 \\
+P vs.\ B1 & SIRR@5 & $-0.174$ [$-0.195$, $-0.152$] & 0.0024 \\
+\addlinespace
+P vs.\ B3 & nDCG@5 & $+0.081$ [$+0.057$, $+0.105$] & 0.0024 \\
+P vs.\ B3 & Recall@5 & $+0.063$ [$+0.045$, $+0.082$] & 0.0024 \\
+P vs.\ B3 & SIRR@5 & $-0.048$ [$-0.061$, $-0.036$] & 0.0024 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\begin{table}[t]
+\centering
+\caption{English-query controlled retrieval: 420 metadata-derived scenarios, 199 crops from 63 parent images. B3 $\beta=0.20$ is untuned. SIRR is internal metadata mismatch, not safety.}
+\label{tab:retrieval}
+\small
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Method} & \textbf{P@5} & \textbf{R@5} & \textbf{nDCG@5} & \textbf{SIRR@5}$\downarrow$ \\
+\midrule
+B0: Ungated hybrid & 0.277 & 0.235 & 0.283 & 0.218 \\
+B1: Query expansion & 0.373 & 0.241 & 0.343 & 0.301 \\
+B2: Hard filter & 0.350 & 0.340 & 0.374 & \textbf{0.011} \\
+B3: Fixed soft ($\beta{=}0.20$) & 0.409 & 0.317 & 0.465 & 0.175 \\
+P: Adaptive & \textbf{0.485} & \textbf{0.380} & \textbf{0.545} & 0.127 \\
+\midrule
+Reference-stage oracle & 0.614 & 0.453 & 0.661 & 0.070 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+Table~\ref{tab:strat} stratifies the same scenarios. Adaptive reaches nDCG@5 0.576 versus B1 0.332 on correct pseudo-stage predictions ($n=330$). On adjacent errors ($n=84$), Adaptive reaches 0.435 versus B1 0.385, but B3 reaches 0.444. On six nonadjacent errors, Adaptive SIRR rises to 0.433 versus 0.100 for hard filtering. This rare subset is descriptive, not evidence of population-level performance.
+
+\begin{table}[t]
+\centering
+\caption{nDCG@5 / metadata SIRR@5 by weak-stage prediction error (correct $n=330$, adjacent $n=84$, nonadjacent $n=6$); the last stratum is underpowered.}
+\label{tab:strat}
+\small
+\begin{tabular}{lccc}
+\toprule
+\textbf{Method} & \textbf{Correct} & \textbf{Adjacent} & \textbf{Nonadj.} \\
+\midrule
+B0 & 0.280 / 0.222 & 0.304 / 0.188 & 0.188 / 0.367 \\
+B1 & 0.332 / 0.307 & 0.385 / 0.271 & 0.342 / 0.367 \\
+B2 & 0.423 / \textbf{0.000} & 0.200 / \textbf{0.048} & 0.146 / \textbf{0.100} \\
+B3 & 0.472 / 0.171 & \textbf{0.444} / 0.174 & 0.349 / 0.400 \\
+P & \textbf{0.576} / 0.111 & 0.435 / 0.167 & \textbf{0.392} / 0.433 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+% Trade-off visualization kept in full manuscript; IEEE draft retains numerical retrieval table.
+
+
+\section{Discussion}
+Under a single fixed group split, a ResNet-18 achieves about 0.80 accuracy against \emph{weakly derived} BBCH macro-stage labels. Ordinal loss changes overall accuracy negligibly but gives identical reproductive recall (0.917) across three seeds on the same 24 test images; this is descriptive within-split stability, not statistically established improvement or cross-field generalization. Grain filling (10 test images) remains underpowered.
+
+Under the untuned fixed weight ($\beta=0.20$), Adaptive improves metadata-based scores over B0, B1 and B3. A separate validation-only study (359 scenarios from 180 crops and 59 parent groups) selects fixed $\beta=0.35$ using validation nDCG@5 minus metadata-SIRR@5. On held-out test scenarios, tuned fixed reaches nDCG@5 0.612 / SIRR@5 0.101 versus Adaptive 0.545/0.127 (parent-clustered $\Delta$ nDCG $+0.0662$, 95\% CI $[+0.0500,+0.0835]$, exploratory Holm $p=0.0012$). A top-1-belief variant reaches 0.617/0.098 and top-1-confidence variant 0.569/0.118, challenging the need for the combined-confidence belief signal. All improvements are defined against reused compatibility metadata, not field applicability or agronomic safety.
+
+\section{Limitations}
+\label{sec:limitations}
+The 2{,}900 macro-stage reference labels are morphology-derived rather than expert-confirmed BBCH observations; vision accuracy and selective risk measure agreement with these weak labels. Only one ResNet-18 backbone and one fixed data split were assessed, with small reproductive ($n=24$) and grain-filling ($n=10$) test subsets. Parent/aHash grouping controls detected near-duplicate leakage but cannot establish independence across fields, seasons, cultivars or devices. Retrieval relevance and SIRR are defined using the same stage metadata consumed by reranking, so they measure internal compatibility rather than independently judged agronomic usefulness or safety. Both validation-tuned fixed-soft and top-1-belief variants outperform the original adaptive scheme on these metadata metrics; the hard filter does not guarantee five outputs. Results do not establish external generalization, accurate field BBCH staging or autonomous decision-support safety.
+
+\section{Ethical Considerations}
+
+Farm images can reveal location, farm layout, or other information the grower may not want disclosed, so any public release should strip personal identifiers and precise geolocation unless the source has explicitly consented. The system is a research component feeding a larger decision-support pipeline, not an autonomous authority on agronomic decisions. Outputs involving pesticides, dosage, withholding periods, or regulated actions must be grounded in current authoritative sources, and low-confidence predictions should prompt a request for a better image or an uncertainty flag rather than a definitive-sounding recommendation.
+
+\section{Conclusion}
+
+CropState-Vision evaluates six morphology-derived rice pseudo-stages and uncertainty-aware evidence routing. Three-seed, fixed-split ResNet-18 accuracy is approximately 0.800 against weak labels. With matching English lexical queries and English IRRI chunks, Adaptive reaches nDCG@5 0.545 versus B1 0.343, with metadata-SIRR@5 0.127 versus 0.301 over 420 scenarios. A validation-tuned fixed-soft baseline reaches nDCG 0.612, and a top-1-belief variant 0.617; therefore combined-confidence adaptivity is not established as best. Hard filtering has lower mismatch but misses Top-5 completion in 10\% of scenarios. Parent-group clustering, weak labels and metadata-derived relevance bound these results to internal research evaluation rather than independent BBCH accuracy or agronomic effectiveness.
+
+\section{Data and Code Availability}
+\label{sec:availability}
+
+The image benchmark derives from RiceSEG segmentation masks under its original access terms \cite{zhou2025riceseg}; no source images are redistributed. Our BBCH macro-stage labels are heuristic weak labels. The 173-chunk IRRI knowledge corpus is machine-curated for research \cite{irriRiceKnowledgeBank}; code is available at \url{https://github.com/khov4nfs/cropstate}. The permitted provenance, hashes and scenario IDs accompany the code; source text and images remain under original access conditions. Original image and text assets remain subject to their source terms and are not redistributed with this paper.
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}

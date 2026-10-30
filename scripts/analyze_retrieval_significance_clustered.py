@@ -1,12 +1,10 @@
-"""Image-clustered paired-bootstrap significance and error-stratified retrieval analysis.
+"""Original-parent-group bootstrap/sign-flip inference and error-stratified retrieval analysis.
 
 Addresses two reviewer-mandated (P0) fixes for the CropState-Vision paper:
 
-  * P0-3.8  Retrieval "significantly outperforms" claims need paired difference
-            tables with 95% CIs and Holm-adjusted p-values. Because a single test
-            image spawns several topic scenarios, the bootstrap resamples whole
-            *images* (clusters of scenarios) rather than individual scenarios, so
-            the CIs respect the non-independence of same-image scenarios.
+  * P0-3.8  Paired CI and Holm-adjusted tests resample whole original parent
+            photographs (not overlapping image crops or repeated topics).
+            Parent IDs must come from the split manifest; missing IDs fail closed.
   * P0-3.3  The error-stratified table (correct / adjacent / non-adjacent) must
             include the strongest baseline B1 (query expansion) for a fair
             comparison against the proposed adaptive gating (P).
@@ -17,6 +15,8 @@ Output: CROPSTATE_RESULTS/retrieval/retrieval_significance_clustered.json
 
 from __future__ import annotations
 
+import argparse
+import csv
 import json
 from collections import defaultdict
 from pathlib import Path
@@ -65,7 +65,17 @@ def image_id(scenario_id: str) -> str:
 
 
 def main() -> None:
-    data = json.loads(IN_PATH.read_text())
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--input", type=Path, default=IN_PATH)
+    parser.add_argument("--image-manifest", type=Path, required=True,
+                        help="Mapping of source image_id to original parent_image_id")
+    parser.add_argument("--output", type=Path, default=OUT_PATH)
+    parser.add_argument("--n-bootstrap", type=int, default=N_BOOT)
+    parser.add_argument("--seed", type=int, default=SEED)
+    args = parser.parse_args()
+    if args.n_bootstrap < 100:
+        parser.error("n-bootstrap must be >=100")
+    data = json.loads(args.input.read_text())
     rows = data["rows"]
 
     by_scenario: dict[str, dict[str, dict]] = defaultdict(dict)
@@ -73,13 +83,23 @@ def main() -> None:
         by_scenario[row["scenario_id"]][row["method"]] = row
     scenarios = list(by_scenario)
 
-    # Cluster scenarios by source image so the bootstrap resamples whole images.
+    # Original parent photographs, not their overlapping crops, are sampling units.
+    with args.image_manifest.open(encoding="utf-8-sig", newline="") as stream:
+        manifest_rows = list(csv.DictReader(stream))
+    parent_map = {str(row["image_id"]): str(row["parent_image_id"]) for row in manifest_rows}
+    if any(not row["parent_image_id"] for row in manifest_rows):
+        raise ValueError("Blank original parent_image_id in image manifest")
+    if len(parent_map) != len(manifest_rows):
+        raise ValueError("Duplicated image_id in image manifest")
     clusters: dict[str, list[str]] = defaultdict(list)
     for scenario in scenarios:
-        clusters[image_id(scenario)].append(scenario)
-    cluster_keys = list(clusters)
+        img = image_id(scenario)
+        if img not in parent_map:
+            raise ValueError(f"Missing original parent_image_id for image {img}")
+        clusters[parent_map[img]].append(scenario)
+    cluster_keys = sorted(clusters)
 
-    rng = np.random.default_rng(SEED)
+    rng = np.random.default_rng(args.seed)
 
     def paired_bootstrap(proposed: str, baseline: str, metric: str) -> dict:
         diffs = {
@@ -87,15 +107,27 @@ def main() -> None:
             for s in scenarios
         }
         observed = float(np.mean([diffs[s] for s in scenarios]))
-        boot = np.empty(N_BOOT)
+        boot = np.empty(args.n_bootstrap)
         n_clusters = len(cluster_keys)
-        for b in range(N_BOOT):
+        for b in range(args.n_bootstrap):
             picks = rng.integers(0, n_clusters, n_clusters)
             vals = [diffs[s] for idx in picks for s in clusters[cluster_keys[idx]]]
             boot[b] = np.mean(vals)
         lo, hi = np.percentile(boot, [2.5, 97.5])
-        p = 2.0 * min(float(np.mean(boot <= 0)), float(np.mean(boot >= 0)))
-        return {"diff": observed, "ci95": [float(lo), float(hi)], "p_raw": min(p, 1.0)}
+        # A bootstrap distribution centred on the observed effect does not
+        # directly impose the null; use cluster-wise paired sign flips to
+        # test H0: zero mean effect, then correct the family of 12 tests.
+        # A +1 Monte-Carlo adjustment prevents the impossible p=0.0.
+        cluster_sums = np.array([
+            sum(diffs[s] for s in clusters[c]) for c in cluster_keys
+        ], dtype=float)
+        permutations = rng.choice((-1.0, 1.0), size=(args.n_bootstrap, n_clusters))
+        null_stats = permutations @ cluster_sums / len(scenarios)
+        p = (1 + int(np.count_nonzero(np.abs(null_stats) >= abs(observed)))) / (
+            args.n_bootstrap + 1
+        )
+        return {"diff": observed, "ci95": [float(lo), float(hi)],
+                "p_raw": min(p, 1.0), "p_test": "paired cluster sign-flip"}
 
     comparisons = {}
     flat = []
@@ -132,17 +164,21 @@ def main() -> None:
 
     out = {
         "n_scenarios": len(scenarios),
-        "n_images": len(cluster_keys),
-        "n_bootstrap": N_BOOT,
-        "seed": SEED,
+        "n_images": len({image_id(s) for s in scenarios}),
+        "n_parent_groups": len(cluster_keys),
+        "n_bootstrap": args.n_bootstrap,
+        "seed": args.seed,
         "proposed": PROPOSED,
-        "clustering": "scenarios resampled by source image id",
+        "clustering": "original parent_image_id (all overlapping crops and topics grouped)",
         "multiple_comparison_correction": "holm",
+        "p_value_test": "paired cluster sign-flip permutation with +1 correction",
+        "n_signflip_permutations": args.n_bootstrap,
         "paired_bootstrap": comparisons,
         "error_stratified": stratified,
     }
-    OUT_PATH.write_text(json.dumps(out, indent=2))
-    print(f"wrote {OUT_PATH}")
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(json.dumps(out, indent=2))
+    print(f"wrote {args.output}")
 
 
 if __name__ == "__main__":

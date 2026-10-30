@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 
 from cropstate.knowledge import KnowledgeChunk
-from cropstate.retrieval import rerank
+from cropstate.retrieval import rerank, rerank_scores
 
 
 class RetrievalTest(unittest.TestCase):
@@ -29,6 +29,23 @@ class RetrievalTest(unittest.TestCase):
             1.0,
         )
         self.assertEqual(ranked[0], "first")
+
+    def test_authority_confound_can_be_disabled(self):
+        a = KnowledgeChunk(
+            chunk_id="a", text="test a", topic="x",
+            stage_compatibility=(1, 0, 0, 0, 0, 0), authority_score=0.0,
+        )
+        b = KnowledgeChunk(
+            chunk_id="b", text="test b", topic="x",
+            stage_compatibility=(1, 0, 0, 0, 0, 0), authority_score=1.0,
+        )
+        base = {"a": 0.5, "b": 0.5}
+        chunks = {"a": a, "b": b}
+        belief = np.array([1, 0, 0, 0, 0, 0], dtype=float)
+        fair = rerank_scores(base, chunks, belief, 1.0, source_weight=0.0)
+        self.assertAlmostEqual(fair["a"]["final_score"], fair["b"]["final_score"])
+        weighted = rerank_scores(base, chunks, belief, 1.0, source_weight=0.1)
+        self.assertGreater(weighted["b"]["final_score"], weighted["a"]["final_score"])
 
 
 if __name__ == "__main__":

@@ -1,0 +1,62 @@
+name: IEEE camera-ready compilation and A4 preflight
+
+on:
+  pull_request:
+    paths:
+      - "paper/cropstate_camera_ready_ieee_short.tex"
+      - "paper/references.bib"
+      - "paper/figures/**"
+      - ".github/workflows/camera-ready-ieee-draft.yml"
+  workflow_dispatch:
+
+jobs:
+  compile-ieee-draft:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile IEEEtran draft with XeLaTeX
+        uses: xu-cheng/latex-action@v3
+        with:
+          working_directory: paper
+          root_file: cropstate_camera_ready_ieee_short.tex
+          latexmk_use_xelatex: true
+          os: debian
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Report page count (conference cap is 6)
+        run: |
+          python -m pip install pypdf
+          python - <<'PY'
+          from pathlib import Path
+          from pypdf import PdfReader
+          target=Path("paper/cropstate_camera_ready_ieee_short.pdf")
+          reader=PdfReader(str(target))
+          pages=len(reader.pages)
+          print(f"IEEE draft page count: {pages} (standard cap 6)")
+          if pages>6:
+              raise SystemExit("FAIL: IEEE camera-ready exceeds six-page standard cap.")
+          if not target.read_bytes().startswith(b"%PDF-1.6"):
+              raise SystemExit("FAIL: PDF must use version 1.6.")
+          for page in reader.pages:
+              width=float(page.mediabox.width)
+              height=float(page.mediabox.height)
+              if abs(width-595.28)>1 or abs(height-841.89)>1:
+                  raise SystemExit(f"FAIL: Expected A4 pages, got {width:.2f}x{height:.2f} pt.")
+          build_log=Path("paper/cropstate_camera_ready_ieee_short.log").read_text(errors="replace")
+          for warning in ("Overfull \\\\hbox", "There were undefined references",
+                          "Undefined control sequence", "Missing character:"):
+              if warning in build_log:
+                  raise SystemExit("FAIL: camera-ready build warning: " + warning)
+          print("Verified A4, PDF 1.6, and six-page layout: no overfull boxes or unresolved references.")
+          print("NOTE: Retrieval recomputed on metadata-derived labels; vision metrics remain historical.")
+          print("NOTE: Expert BBCH labels and independent agronomic relevance are study limitations, not claimed results.")
+          PY
+      - name: Upload camera-ready candidate and build log
+        uses: actions/upload-artifact@v4
+        with:
+          name: cropstate-ieee-camera-ready-candidate
+          path: |
+            paper/cropstate_camera_ready_ieee_short.pdf
+            paper/cropstate_camera_ready_ieee_short.log
+          retention-days: 30

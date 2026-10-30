@@ -1,0 +1,52 @@
+name: Reviewer revision - retrieval integrity
+
+on:
+  pull_request:
+    paths:
+      - "scripts/experiments/build_belief_scenarios.py"
+      - "src/cropstate/confidence.py"
+      - "tests/test_scenario_calibration.py"
+      - "tests/test_retrieval.py"
+      - "src/cropstate/retrieval.py"
+      - "scripts/reproduce_retrieval_benchmark.py"
+      - "scripts/analyze_retrieval_significance_clustered.py"
+      - "scripts/evaluate_retrieval.py"
+      - "tests/test_retrieval_reproduction.py"
+      - "tests/test_retrieval_protocol_corrections.py"
+      - "scripts/experiments/run_retrieval_ablations.py"
+      - "scripts/prepare_retrieval_expert_review.py"
+      - "tests/test_independent_validation.py"
+      - "tests/test_integration_validation_pipeline.py"
+      - "docs/INDEPENDENT_VALIDATION_PROTOCOL.md"
+      - "docs/RIVF26_REVIEWER_REVISION.md"
+      - "paper/cropstate_camera_ready_ieee_short.tex"
+      - "src/cropstate/onnx_encoder.py"
+      - "tests/test_onnx_encoder.py"
+      - "requirements-onnx.txt"
+      - ".github/workflows/retrieval-integrity.yml"
+  workflow_dispatch:
+
+jobs:
+  calibration-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install lightweight test dependencies
+        run: python -m pip install "numpy>=1.26" "scipy>=1.13" "scikit-learn>=1.4" "Pillow>=10"
+      - name: Verify calibrated stage belief and confidence
+        run: PYTHONPATH=src python -m unittest discover -s tests -p 'test_scenario_calibration.py' -v
+      - name: Verify stage reranking without source authority confounding
+        run: PYTHONPATH=src python -m unittest discover -s tests -p 'test_retrieval.py' -v
+      - name: Verify ONNX FP32 mean-pooling adapter without model downloads
+        run: PYTHONPATH=src python -m unittest discover -s tests -p 'test_onnx_encoder.py' -v
+      - name: Verify blinded expert scoring and validation-only ablations (synthetic fixtures)
+        run: PYTHONPATH=src:. python -m unittest discover -s tests -p 'test_independent_validation.py' -v
+      - name: Integration proof — prepare blind images, enforce no unjudged metrics and score fixture labels
+        run: PATH="$PWD/.venv/bin:$PATH" PYTHONPATH=src:. python -m unittest discover -s tests -p 'test_integration_validation_pipeline.py' -v
+      - name: Verify English BM25 lexical signal and parent-group inference (synthetic fixtures)
+        run: PYTHONPATH=src:. python -m unittest discover -s tests -p 'test_retrieval_protocol_corrections.py' -v
+      - name: Verify 420-scenario provenance preflight (synthetic fixtures only)
+        run: PYTHONPATH=src python -m unittest discover -s tests -p 'test_retrieval_reproduction.py' -v

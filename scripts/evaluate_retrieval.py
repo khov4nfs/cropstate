@@ -83,14 +83,41 @@ def main() -> None:
     parser.add_argument("--scenarios", required=True)
     parser.add_argument("--mode", choices=["research", "production", "all"], default="research")
     parser.add_argument("--embedding-model", default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+    parser.add_argument("--embedding-backend", choices=("sentence-transformers", "onnx"),
+                        default="sentence-transformers", help="ONNX FP32 is an explicit alternative execution backend.")
+    parser.add_argument("--onnx-model-dir", default=None, help="Pinned model snapshot path for ONNX backend.")
+    parser.add_argument("--query-language", choices=("en", "vi"), default="en",
+                        help="Use English lexical queries for the English IRRI corpus; legacy VI is explicit.")
     parser.add_argument("--depth", type=int, default=50)
     parser.add_argument("--k", type=int, default=5)
+    parser.add_argument("--source-weight", type=float, default=0.0,
+                        help="Authority bonus applied only to soft rerankers; default zero to isolate stage gating.")
+    parser.add_argument("--fixed-beta", type=float, default=0.20,
+                        help="Fixed-soft weight; tune on validation scenarios, not test.")
+    parser.add_argument("--include-general-fallback", action="store_true",
+                        help="Include general_crop_care chunks; evaluate their relevance explicitly if enabled.")
     parser.add_argument("--output", default="results/retrieval_evaluation.json")
     args = parser.parse_args()
 
+    if not 0.0 <= args.source_weight < 1.0 or not 0.0 <= args.fixed_beta <= 1.0 - args.source_weight:
+        parser.error("source-weight and fixed-beta must be non-negative and sum to <= 1")
     chunks = load_knowledge_chunks(args.corpus, mode=args.mode)
     chunk_map = {chunk.chunk_id: chunk for chunk in chunks}
-    retriever = HybridRetriever(chunks, embedding_model=args.embedding_model)
+    encoder = None
+    encoder_metadata = {"backend": args.embedding_backend, "model_id": args.embedding_model}
+    if args.embedding_backend == "onnx":
+        if args.embedding_model != "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2":
+            parser.error("The ONNX adapter is pinned to multilingual MiniLM-L12-v2 only.")
+        from cropstate.onnx_encoder import ONNXSentenceEncoder
+        encoder = ONNXSentenceEncoder(model_dir=args.onnx_model_dir)
+        encoder_metadata.update({
+            "model_sha256": encoder.model_sha256,
+            "tokenizer_sha256": encoder.tokenizer_sha256,
+            "max_seq_length": 128,
+            "pooling": "attention_masked_mean_plus_l2",
+            "note": "Same pretrained model weights, distinct ONNX FP32 execution backend; may differ numerically from PyTorch.",
+        })
+    retriever = HybridRetriever(chunks, embedding_model=args.embedding_model, encoder=encoder)
     scenarios = read_scenarios(Path(args.scenarios))
     rows: list[dict[str, Any]] = []
 
@@ -100,25 +127,44 @@ def main() -> None:
         true_stage = normalize_stage(str(scenario["ground_truth_stage"]))
         predicted_stage = normalize_stage(str(scenario.get("predicted_stage") or true_stage))
         belief = parse_belief(scenario.get("stage_belief"), predicted_stage)
-        confidence = float(scenario.get("confidence") or belief.max())
+        # Zero is a valid low-confidence value; do not turn it into belief.max().
+        confidence_raw = scenario.get("confidence")
+        confidence = float(confidence_raw) if confidence_raw not in (None, "") else float(belief.max())
+        if not np.isfinite(confidence) or not 0.0 <= confidence <= 1.0:
+            raise ValueError(f"Invalid routing confidence for scenario {scenario_id}: {confidence!r}")
         # B0/B2/B3/P share a stage-free query; only B1 (query expansion) gets a stage-bearing query.
-        base_query = str(scenario.get("query") or build_topic_query(topic))
-        expanded_query = build_topic_query(topic, predicted_stage)
+        base_query = str(scenario.get("query") or build_topic_query(topic, language=args.query_language))
+        expanded_query = build_topic_query(topic, predicted_stage, language=args.query_language)
         relevance = parse_relevance(scenario)
         relevant = {document_id for document_id, grade in relevance.items() if grade > 0}
         incompatible = parse_ids(scenario.get("incompatible_chunk_ids", scenario.get("nonmatching_chunk_ids")))
 
-        bm25_ranked, dense_ranked = retriever.retrieve(base_query, depth=args.depth, topic=topic)
+        bm25_ranked, dense_ranked = retriever.retrieve(
+            base_query, depth=args.depth, topic=topic,
+            include_general_fallback=args.include_general_fallback,
+        )
         base_scores = minmax(reciprocal_rank_fusion([bm25_ranked, dense_ranked]))
-        expanded_bm25, expanded_dense = retriever.retrieve(expanded_query, depth=args.depth, topic=topic)
+        expanded_bm25, expanded_dense = retriever.retrieve(
+            expanded_query, depth=args.depth, topic=topic,
+            include_general_fallback=args.include_general_fallback,
+        )
         expanded_scores = minmax(reciprocal_rank_fusion([expanded_bm25, expanded_dense]))
         methods = {
             "B0_ungated": sorted(base_scores, key=base_scores.get, reverse=True),
             "B1_query_expansion": sorted(expanded_scores, key=expanded_scores.get, reverse=True),
             "B2_hard_filter": hard_filter(base_scores, chunk_map, int(np.argmax(belief))),
-            "B3_fixed_soft": rerank(base_scores, chunk_map, belief, confidence, fixed_beta=0.20),
-            "P_adaptive_soft": rerank(base_scores, chunk_map, belief, confidence),
-            "oracle_reference": rerank(base_scores, chunk_map, one_hot(true_stage), 1.0),
+            "B3_fixed_soft": rerank(
+                base_scores, chunk_map, belief, confidence,
+                source_weight=args.source_weight, fixed_beta=args.fixed_beta,
+            ),
+            "P_adaptive_soft": rerank(
+                base_scores, chunk_map, belief, confidence,
+                source_weight=args.source_weight,
+            ),
+            "oracle_reference": rerank(
+                base_scores, chunk_map, one_hot(true_stage), 1.0,
+                source_weight=args.source_weight,
+            ),
         }
         for method, ranking in methods.items():
             precision, recall = precision_recall_at_k(ranking, relevant, args.k)
@@ -132,6 +178,8 @@ def main() -> None:
                 "recall_at_k": recall,
                 "ndcg_at_k": ndcg_at_k(ranking, relevance, args.k),
                 "sirr_at_k": sirr_at_k(ranking, incompatible, args.k),
+                "returned_at_k": min(len(ranking), args.k),
+                "top_k_complete": int(len(ranking) >= args.k),
                 "top_ids": ranking[: args.k],
             })
 
@@ -140,9 +188,24 @@ def main() -> None:
         subset = [row for row in rows if row["method"] == method]
         summary[method] = {
             metric: float(np.mean([row[metric] for row in subset]))
-            for metric in ["precision_at_k", "recall_at_k", "ndcg_at_k", "sirr_at_k"]
+            for metric in ["precision_at_k", "recall_at_k", "ndcg_at_k", "sirr_at_k", "returned_at_k", "top_k_complete"]
         }
-    payload = {"k": args.k, "scenario_count": len(scenarios), "summary": summary, "rows": rows}
+    payload = {
+        "k": args.k,
+        "scenario_count": len(scenarios),
+        "evaluation_config": {
+            "source_weight": args.source_weight,
+            "fixed_beta": args.fixed_beta,
+            "include_general_fallback": args.include_general_fallback,
+            "embedding_model": args.embedding_model,
+            "embedding_backend": encoder_metadata,
+            "depth": args.depth,
+            "mode": args.mode,
+            "query_language": args.query_language,
+            "english_corpus": True,
+        },
+        "summary": summary, "rows": rows,
+    }
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")

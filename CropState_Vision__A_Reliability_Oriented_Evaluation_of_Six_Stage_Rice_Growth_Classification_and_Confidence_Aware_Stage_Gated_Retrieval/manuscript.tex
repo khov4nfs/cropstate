@@ -168,7 +168,7 @@ P  & Combined-confidence, full-belief adaptive re-ranking. \\
 
 \subsection{Metrics and Statistical Analysis}
 
-Vision metrics include accuracy, macro-F1, ECE, Brier score, Mean Absolute Stage Distance (MASD) and per-class recall against weak pseudo-stage labels. Selective risk is one minus accuracy on the retained test subset, summarized by a risk--coverage curve/AURC. Retrieval metrics are P@5, R@5, nDCG@5 \cite{jarvelin2002ndcg} and metadata-SIRR@5. Unlike crop-wise resampling, the paired bootstrap and sign-flip tests cluster all topics/crops belonging to the same \emph{original parent photograph} (63 groups), with 5{,}000 resamples and Holm adjustment over 12 pre-specified method--metric comparisons \cite{holm1979sequential}. Incomplete Top-5 returns are measured separately because SIRR@5 divides by five even when fewer chunks are returned.
+Vision metrics include accuracy, macro-F1, ECE, Brier score, Mean Absolute Stage Distance (MASD) and per-class recall against weak pseudo-stage labels. Selective risk is one minus accuracy over retained weak-label test crops. We compute full risk--coverage curves at all 263 sorted top-$k$ prefixes. The exact full-coverage AURC is the mean prefix risk $\frac{1}{263}\sum_{k=1}^{263}R(k)$, rather than a trapezoid over sparse manually chosen thresholds. Retrieval metrics are P@5, R@5, nDCG@5 \cite{jarvelin2002ndcg} and metadata-SIRR@5. Unlike crop-wise resampling, the paired bootstrap and sign-flip tests cluster all topics/crops belonging to the same \emph{original parent photograph} (63 groups), with 5{,}000 resamples and Holm adjustment over 12 pre-specified method--metric comparisons \cite{holm1979sequential}. Incomplete Top-5 returns are measured separately because SIRR@5 divides by five even when fewer chunks are returned.
 
 \section{Results}
 
@@ -198,12 +198,12 @@ The ordinal objective yields identical reproductive recall of 0.917 across seeds
 
 \subsection{Selective Prediction}
 
-On seed-42 CE logits, validation-set temperature scaling gives $T=0.875$. The full-test weak-label risk is 0.2053. A confidence threshold of 0.524541, chosen exclusively on 237 validation logits to target approximately 70\% coverage, retains 189/263 test crops (coverage 0.7186) at weak-label selective risk 0.1217. The full risk--coverage analysis has AURC 0.126. The earlier 0.54-coverage, 0.099-risk point was illustrative and \emph{not} selected on validation; Fig.~\ref{fig:risk-coverage} distinguishes it from the validation-selected operating point. None of these risks is validated against expert BBCH labels.
+On seed-42 CE logits, validation-set temperature scaling gives $T=0.875$. The full-test weak-label risk is 0.2053. A confidence threshold of 0.524541, chosen exclusively on 237 validation logits to target approximately 70\% coverage, retains 189/263 test crops (coverage 0.7186) at weak-label selective risk 0.1217. Using all 263 ranked test prefixes, the exact AURC is 0.1042 for combined entropy/margin confidence and 0.1036 for max-softmax. The previous AURC 0.126 was a trapezoidal estimate over 14 sparse confidence thresholds, normalized by the observed coverage span (0.285--1.0), rather than all nonempty prefixes; it is superseded by the full-coverage AURC. The historical coverage 0.5399/risk 0.0986 point used a \emph{max-softmax threshold of 0.8}, not the combined-confidence score; Fig.~\ref{fig:risk-coverage} therefore shows two separately labeled curves. The 189/263 retained validation-selected point belongs to the combined-confidence curve and was not fitted to test labels. Neither curve establishes expert-confirmed BBCH correctness.
 
 \begin{figure}[t]
 \centering
-\resizebox{0.78\linewidth}{!}{\input{images/risk_coverage.tex}}
-\caption{Weak-label selective risk versus coverage; the validation-selected threshold and illustrative point are distinguished (AURC = 0.126).}
+\resizebox{0.99\linewidth}{!}{\input{images/risk_coverage.tex}}
+\caption{Full empirical weak-label risk--coverage curves (263 test crops): combined confidence (solid, AURC 0.1042) and max-softmax (dashed, AURC 0.1036). The star marks the validation-selected combined-confidence threshold ($\tau=0.524541$; 189/263 retained); the hollow circle marks the earlier illustrative max-softmax cutoff (0.8; 142/263 retained). AURC averages risk over all nonempty top-$k$ prefixes; no expert BBCH labels were used.}
 \label{fig:risk-coverage}
 \end{figure}
 

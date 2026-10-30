@@ -1,0 +1,10 @@
+# LaTeX temporary/build outputs; keep manuscript.pdf as the reviewed artifact.
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.xdv
